@@ -1,0 +1,1 @@
+{"root":["./vite.config.ts","./server/api.ts","./server/providers/brokerrealtimeprovider.ts","./server/providers/dartdisclosureprovider.ts","./server/providers/krxdailyprovider.ts","./server/providers/naverdelayedquoteprovider.ts","./server/providers/types.ts","./server/providers/utils.ts"],"version":"5.6.3"}
