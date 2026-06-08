@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { registerApiRoutes } from "./server/api";
 
 export default defineConfig({
+  base: "/k-market-radar/",
   plugins: [
     react(),
     {
