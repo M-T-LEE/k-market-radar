@@ -352,7 +352,7 @@ const baseScenarios: Scenario[] = [
       "인건비 상승과 제조 자동화, 물류 효율화, AI 비전 기술이 산업용 로봇과 부품 밸류체인 수요를 만든다.",
     nodes: [
       { id: "robot-root", label: "자동화 수요", theme: "로봇", description: "제조·물류·서비스 자동화", x: 18, y: 50 },
-      { id: "actuator", label: "액츄에이터", theme: "로봇", description: "감속기, 서보모터, 구동부", x: 60, y: 24 },
+      { id: "actuator", label: "액추에이터", theme: "로봇", description: "감속기, 서보모터, 구동부", x: 60, y: 24 },
       { id: "vision", label: "머신비전", theme: "기계/장비", description: "센서, 카메라, 검사 장비", x: 60, y: 42 },
       { id: "factory", label: "스마트팩토리", theme: "기계/장비", description: "공장 자동화와 제어 시스템", x: 60, y: 60 },
       { id: "software", label: "AI 제어", theme: "AI 인프라", description: "로봇 제어 소프트웨어와 추론", x: 60, y: 78 }
@@ -365,11 +365,11 @@ const baseScenarios: Scenario[] = [
     ],
     summary: [
       "자동화 투자는 인건비와 품질 개선 압력이 커질 때 탄력이 붙는다.",
-      "액츄에이터와 감속기는 로봇 원가와 성능을 좌우하는 핵심 부품이다.",
+      "액추에이터와 감속기는 로봇 원가와 성능을 좌우하는 핵심 부품이다.",
       "머신비전과 AI 제어는 로봇 적용 범위를 넓힌다.",
       "상용화 속도와 가격 경쟁은 실적 연결성의 핵심 리스크다."
     ],
-    coreValueChains: ["액츄에이터", "감속기", "머신비전", "스마트팩토리", "AI 제어"]
+    coreValueChains: ["액추에이터", "감속기", "머신비전", "스마트팩토리", "AI 제어"]
   },
   {
     id: "construction-infra-cycle",

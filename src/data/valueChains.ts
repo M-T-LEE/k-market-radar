@@ -135,8 +135,8 @@ const baseValueChains: ValueChain[] = [
   {
     id: "robot-actuator",
     scenarioId: "ai-infra-cycle",
-    name: "로봇 액츄에이터",
-    coreTechnology: "액츄에이터, 정밀 감속기, 서보모터, 로봇 관절 모듈",
+    name: "로봇 액추에이터",
+    coreTechnology: "액추에이터, 정밀 감속기, 서보모터, 로봇 관절 모듈",
     representativeCompanies: ["Harmonic Drive", "Nabtesco", "에스피지", "로보티즈", "하이젠알앤엠"],
     centralityScore: 75,
     earningsLinkLevel: "중간",
@@ -509,8 +509,8 @@ const baseValueChains: ValueChain[] = [
   {
     id: "robot-actuator-core",
     scenarioId: "robot-automation-cycle",
-    name: "액츄에이터·감속기",
-    coreTechnology: "정밀 감속기, 서보모터, 액츄에이터 모듈",
+    name: "액추에이터·감속기",
+    coreTechnology: "정밀 감속기, 서보모터, 액추에이터 모듈",
     representativeCompanies: ["에스피지", "로보티즈", "하이젠알앤엠"],
     centralityScore: 78,
     earningsLinkLevel: "중간",

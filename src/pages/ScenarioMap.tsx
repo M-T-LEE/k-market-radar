@@ -58,7 +58,9 @@ type ScenarioOverview = {
 
 type NodeStockRule = {
   domesticNames?: string[];
+  preferredNames?: string[];
   include?: string[];
+  requiredKeywords?: string[];
   excludeNames?: string[];
   globalReferences?: string[];
 };
@@ -86,6 +88,19 @@ const icons: Record<string, ReactNode> = {
 
 function normalizeText(value: string) {
   return value.replace(/[\s/·,().-]/g, "").toLowerCase();
+}
+
+const canonicalNodeLabels: Record<string, string> = {
+  [normalizeText("액츄에이터")]: "액추에이터",
+  [normalizeText("액추에이터")]: "액추에이터",
+  [normalizeText("로봇 액츄에이터")]: "로봇 액추에이터",
+  [normalizeText("로봇 액추에이터")]: "로봇 액추에이터",
+  [normalizeText("액츄에이터·감속기")]: "액추에이터·감속기",
+  [normalizeText("액추에이터·감속기")]: "액추에이터·감속기"
+};
+
+function getCanonicalNodeLabel(label: string) {
+  return canonicalNodeLabels[normalizeText(label)] ?? label;
 }
 
 function isEtf(stock: Stock) {
@@ -127,7 +142,7 @@ function matchesNormalizedValue(haystack: string, values: string[] = []) {
     const normalized = normalizeText(value);
     if (normalized.length < 2) return false;
     if (haystack === normalized) return true;
-    return normalized.length >= 4 && (haystack.includes(normalized) || normalized.includes(haystack));
+    return normalized.length >= 4 && (haystack.includes(normalized) || (haystack.length >= 4 && normalized.includes(haystack)));
   });
 }
 
@@ -167,15 +182,19 @@ const nodeStockRules: Record<string, NodeStockRule> = {
     globalReferences: ["Amazon", "Shopify", "Meta Platforms", "Alphabet"]
   },
   humanoid: {
-    domesticNames: ["레인보우로보틱스", "두산로보틱스", "로보티즈", "현대차", "현대모비스"],
-    include: ["휴머노이드", "피지컬AI", "피지컬 AI", "보스턴 다이내믹스", "보스턴다이내믹스", "로봇 플랫폼", "로봇 구동"],
-    excludeNames: ["현대로템", "LIG넥스원", "한화에어로스페이스", "한화시스템", "한국항공우주"],
+    domesticNames: ["레인보우로보틱스", "두산로보틱스", "현대차", "현대모비스"],
+    preferredNames: ["레인보우로보틱스", "두산로보틱스"],
+    include: ["휴머노이드", "피지컬AI", "피지컬 AI", "보스턴 다이내믹스", "보스턴다이내믹스", "로봇 플랫폼", "범용 로봇"],
+    requiredKeywords: ["휴머노이드", "피지컬AI", "피지컬 AI", "보스턴 다이내믹스", "보스턴다이내믹스", "로봇 플랫폼", "범용 로봇", "레인보우로보틱스", "두산로보틱스", "현대차", "현대모비스"],
+    excludeNames: ["로보티즈", "에스피지", "하이젠알앤엠", "에스비비테크", "해성티피씨", "현대로템", "LIG넥스원", "한화에어로스페이스", "한화시스템", "한국항공우주"],
     globalReferences: ["Tesla", "Figure AI(비상장)", "Boston Dynamics(비상장)", "Agility Robotics(비상장)"]
   },
   actuator: {
     domesticNames: ["로보티즈", "에스피지", "하이젠알앤엠", "에스비비테크", "해성티피씨"],
-    include: ["액추에이터", "감속기", "서보", "모터", "구동모듈", "로봇 관절"],
-    excludeNames: ["현대로템", "한국항공우주", "한화에어로스페이스"],
+    preferredNames: ["에스피지", "하이젠알앤엠", "에스비비테크", "해성티피씨", "로보티즈"],
+    include: ["액추에이터", "액츄에이터", "감속기", "정밀감속기", "서보", "서보모터", "모터", "구동모듈", "구동부", "로봇 관절"],
+    requiredKeywords: ["액추에이터", "액츄에이터", "감속기", "정밀감속기", "서보", "서보모터", "구동모듈", "구동부", "로봇 관절", "에스피지", "하이젠알앤엠", "에스비비테크", "해성티피씨", "로보티즈"],
+    excludeNames: ["레인보우로보틱스", "두산로보틱스", "현대차", "현대모비스", "현대로템", "한국항공우주", "한화에어로스페이스"],
     globalReferences: ["Harmonic Drive", "Nabtesco"]
   },
   "machine-vision": {
@@ -209,7 +228,7 @@ const nodeKeywordMap: Record<string, string[]> = {
   "data-platform": ["데이터 플랫폼", "RAG", "벡터DB", "데이터 거버넌스", "데이터 레이크", "검색증강", "솔트룩스", "코난테크놀로지", "와이즈넛", "데이타솔루션", "모아데이타", "씨이랩"],
   "ai-commerce": ["AI 광고", "광고", "커머스", "추천", "쇼핑 검색", "결제", "개인화", "카페24", "커넥트웨이브", "NAVER", "카카오", "NHN KCP", "KG이니시스"],
   "physical-ai-root": ["피지컬AI", "피지컬 AI", "휴머노이드", "로봇 플랫폼", "보스턴 다이내믹스", "액추에이터", "머신비전", "협동로봇"],
-  humanoid: ["휴머노이드", "피지컬AI", "보스턴 다이내믹스", "레인보우로보틱스", "두산로보틱스", "로보티즈", "현대차", "현대모비스"],
+  humanoid: ["휴머노이드", "피지컬AI", "보스턴 다이내믹스", "범용 로봇", "로봇 플랫폼", "레인보우로보틱스", "두산로보틱스", "현대차", "현대모비스"],
   "machine-vision": ["머신비전", "비전", "카메라", "센서", "고영", "뷰웍스", "라온피플"],
   "smart-factory": ["스마트팩토리", "공장 자동화", "협동로봇", "제조 자동화", "로보스타", "코윈테크", "포스코DX"],
   "robot-software": ["로봇 제어", "경로계획", "관제", "AI 제어", "현대오토에버", "포스코DX", "물류 자동화"],
@@ -245,7 +264,7 @@ const nodeKeywordMap: Record<string, string[]> = {
   datacenter: ["데이터센터", "서버", "클라우드", "네트워크", "IDC", "GPU", "NAVER", "카카오"],
   power: ["전력", "전력기기", "변압기", "차단기", "전선", "케이블", "원전", "SMR", "일렉트릭"],
   cooling: ["냉각", "액침", "CDU", "열관리", "공조", "HVAC", "Vertiv", "케이엔솔"],
-  robot: ["휴머노이드", "피지컬AI", "액추에이터", "감속기", "서보", "협동로봇", "로보티즈", "레인보우로보틱스", "두산로보틱스"],
+  robot: ["휴머노이드", "피지컬AI", "액추에이터", "액츄에이터", "감속기", "서보", "협동로봇", "로보티즈", "레인보우로보틱스", "두산로보틱스"],
   aerospace: ["우주", "항공", "위성", "발사체", "방산", "항공우주", "한화에어로스페이스", "LIG넥스원"],
   security: ["보안", "사이버", "인증", "제로트러스트", "CrowdStrike", "팔로알토"],
   missile: ["유도무기", "미사일", "방공", "LIG넥스원", "한화에어로스페이스"],
@@ -281,7 +300,7 @@ const nodeKeywordMap: Record<string, string[]> = {
   batteryEquipment: ["장비", "배터리 장비", "피엔티", "윤성에프앤씨"],
   ess: ["ESS", "에너지저장", "전력저장"],
   recycling: ["재활용", "리사이클", "폐배터리"],
-  actuator: ["액추에이터", "감속기", "서보", "로보티즈", "에스피지"],
+  actuator: ["액추에이터", "액츄에이터", "감속기", "정밀감속기", "서보", "서보모터", "구동모듈", "구동부", "로보티즈", "에스피지", "하이젠알앤엠", "에스비비테크", "해성티피씨"],
   vision: ["머신비전", "비전", "카메라"],
   smartFactory: ["스마트팩토리", "자동화", "공장"],
   control: ["AI 제어", "제어", "소프트웨어"],
@@ -336,6 +355,9 @@ function getNodeRelatedStocks(node: ScenarioMapNode, scenario: Scenario, stocks:
   ]));
   const normalizedKeywords = nodeKeywords.map(normalizeText).filter((keyword) => keyword.length >= 2);
   const normalizedRuleKeywords = (rule?.include ?? []).map(normalizeText).filter((keyword) => keyword.length >= 2);
+  const normalizedRequiredKeywords = (rule?.requiredKeywords ?? rule?.include ?? [])
+    .map(normalizeText)
+    .filter((keyword) => keyword.length >= 2);
   const scenarioKeywords = [
     scenario.name,
     scenario.description,
@@ -357,7 +379,9 @@ function getNodeRelatedStocks(node: ScenarioMapNode, scenario: Scenario, stocks:
       const keywordHits = normalizedKeywords.filter((keyword) => haystack.includes(keyword));
       const ruleKeywordHits = normalizedRuleKeywords.filter((keyword) => haystack.includes(keyword));
       const directRuleHit = rule ? matchesNormalizedValue(stockName, rule.domesticNames) : false;
+      const preferredRuleHit = rule ? matchesNormalizedValue(stockName, rule.preferredNames) : false;
       const excludedByRule = rule ? matchesNormalizedValue(stockName, rule.excludeNames) : false;
+      const requiredKeywordHit = normalizedRequiredKeywords.some((keyword) => haystack.includes(keyword));
       const reverseThemeHit =
         stockTheme.length >= 2 && normalizedKeywords.some((keyword) => keyword.includes(stockTheme) || stockTheme.includes(keyword));
       const themeHit = stockTheme === normalizedNodeTheme || stockSector.includes(normalizedNodeTheme) || stockName.includes(normalizedNodeTheme);
@@ -366,16 +390,20 @@ function getNodeRelatedStocks(node: ScenarioMapNode, scenario: Scenario, stocks:
       const rootHit = isRootNode && (scenarioKeywords.some((keyword) => haystack.includes(keyword) || keyword.includes(stockTheme)) || haystack.includes(rootKey));
       const strongRuleSignal =
         !rule ||
+        preferredRuleHit ||
         directRuleHit ||
+        requiredKeywordHit ||
         ruleKeywordHits.length > 0 ||
         ((sectorLabelHit || themeHit) && keywordHits.length > 0);
       const score = rule
-        ? (excludedByRule ? -100 : 0) +
-          (directRuleHit ? 96 : 0) +
-          ruleKeywordHits.length * (stockIsEtf ? 10 : 18) +
-          keywordHits.length * (stockIsEtf ? 4 : 7) +
+        ? (excludedByRule ? -140 : 0) +
+          (preferredRuleHit ? 112 : 0) +
+          (directRuleHit ? 76 : 0) +
+          (requiredKeywordHit ? 34 : 0) +
+          ruleKeywordHits.length * (stockIsEtf ? 8 : 18) +
+          keywordHits.length * (stockIsEtf ? 3 : 5) +
           (sectorLabelHit ? (stockIsEtf ? 12 : 18) : 0) +
-          (themeHit ? (stockIsEtf ? 10 : 12) : 0) +
+          (themeHit && requiredKeywordHit ? (stockIsEtf ? 6 : 8) : 0) +
           (isDomesticMarket(stock) ? 6 : 0) -
           (stockIsEtf ? 20 : 0) -
           (broadEtfOnly ? 24 : 0)
@@ -596,6 +624,10 @@ function getLightNodeStocks(node: ScenarioMapNode, scenario: Scenario, indexedSt
   }
 
   const rule = nodeStockRules[node.id];
+  const ruleKeywords = (rule?.include ?? []).map(normalizeText).filter((keyword) => keyword.length >= 2);
+  const requiredKeywords = (rule?.requiredKeywords ?? rule?.include ?? [])
+    .map(normalizeText)
+    .filter((keyword) => keyword.length >= 2);
   const keywords = Array.from(new Set([
     node.id,
     node.label,
@@ -611,24 +643,36 @@ function getLightNodeStocks(node: ScenarioMapNode, scenario: Scenario, indexedSt
   const matched = indexedStocks
     .map((item) => {
       const directRuleHit = rule ? matchesNormalizedValue(item.name, rule.domesticNames) : false;
+      const preferredRuleHit = rule ? matchesNormalizedValue(item.name, rule.preferredNames) : false;
       const excludedByRule = rule ? matchesNormalizedValue(item.name, rule.excludeNames) : false;
       const keywordHits = keywords.filter((keyword) => item.haystack.includes(keyword));
+      const ruleKeywordHits = ruleKeywords.filter((keyword) => item.haystack.includes(keyword));
+      const requiredKeywordHit = requiredKeywords.some((keyword) => item.haystack.includes(keyword));
       const labelHit = normalizedLabel.length >= 2 && (item.sector.includes(normalizedLabel) || item.name.includes(normalizedLabel));
       const themeHit = normalizedTheme.length >= 2 && (item.theme === normalizedTheme || item.sector.includes(normalizedTheme));
       const reverseThemeHit = item.theme.length >= 2 && keywords.some((keyword) => keyword.includes(item.theme));
+      const ruleSignal = !rule || preferredRuleHit || directRuleHit || requiredKeywordHit || ruleKeywordHits.length > 0 || (labelHit && keywordHits.length > 0);
       const score =
-        (directRuleHit ? 80 : 0) +
-        keywordHits.length * (isEtf(item.stock) ? 8 : 14) +
+        (preferredRuleHit ? 108 : 0) +
+        (directRuleHit ? 72 : 0) +
+        (requiredKeywordHit ? 34 : 0) +
+        ruleKeywordHits.length * (isEtf(item.stock) ? 6 : 18) +
+        keywordHits.length * (isEtf(item.stock) ? 4 : rule ? 6 : 14) +
         (labelHit ? 18 : 0) +
-        (themeHit ? 14 : 0) +
-        (reverseThemeHit ? 8 : 0) +
+        (themeHit && (!rule || requiredKeywordHit) ? 14 : 0) +
+        (!rule && reverseThemeHit ? 8 : 0) +
         (isDomesticMarket(item.stock) ? 4 : 0) -
         (excludedByRule ? 120 : 0) -
         (isEtf(item.stock) ? 8 : 0);
 
-      return { ...item, score };
+      return { ...item, score, ruleSignal, excludedByRule };
     })
-    .filter((item) => item.score >= (rule ? 24 : 16))
+    .filter((item) => {
+      if (!rule) return item.score >= 16;
+      if (!item.ruleSignal || item.excludedByRule) return false;
+      if (isEtf(item.stock)) return item.score >= 34;
+      return item.score >= 44;
+    })
     .sort((a, b) => {
       const scoreDiff = b.score - a.score;
       if (scoreDiff) return scoreDiff;
@@ -639,6 +683,7 @@ function getLightNodeStocks(node: ScenarioMapNode, scenario: Scenario, indexedSt
     .map((item) => item.stock);
 
   if (matched.length) return matched;
+  if (rule) return [];
 
   return indexedStocks
     .filter((item) => item.theme === normalizedTheme || item.sector.includes(normalizedTheme))
@@ -692,7 +737,8 @@ function getScenarioStocksLight(scenario: Scenario, indexedStocks: IndexedStock[
 function buildScenarioOverview(scenario: Scenario, indexedStocks: IndexedStock[]): ScenarioOverview {
   const indexedScenarioStocks = getScenarioStocksLight(scenario, indexedStocks);
   const nodeOverviews = scenario.nodes.map((node) => {
-    const summary = summarizeStocksLight(getLightNodeStocks(node, scenario, indexedScenarioStocks));
+    const nodeCandidateStocks = nodeStockRules[node.id] ? indexedStocks : indexedScenarioStocks;
+    const summary = summarizeStocksLight(getLightNodeStocks(node, scenario, nodeCandidateStocks));
 
     return {
       scenario,
@@ -747,15 +793,186 @@ function buildScenarioOverviews(stocks: Stock[]) {
     });
 }
 
+function getScenarioNodeDedupeKey(item: ScenarioNodeOverview) {
+  const canonicalLabel = getCanonicalNodeLabel(item.node.label);
+  const normalizedLabel = normalizeText(canonicalLabel);
+
+  if (normalizedLabel === normalizeText("액추에이터") || normalizedLabel === normalizeText("액추에이터감속기")) {
+    return "robot-actuator";
+  }
+
+  return `${normalizedLabel}:${normalizeText(item.node.description)}`;
+}
+
+function getScenarioNodePriority(item: ScenarioNodeOverview) {
+  const leaderMove = item.summary.leader ? getStockMove(item.summary.leader) : 0;
+
+  return (
+    item.strongStocks.length * 1000 +
+    item.summary.relatedCount * 10 +
+    Math.max(item.summary.averageChange, 0) +
+    Math.max(leaderMove, 0)
+  );
+}
+
+function dedupeScenarioNodeOverviews(items: ScenarioNodeOverview[]) {
+  const deduped = new Map<string, ScenarioNodeOverview>();
+
+  items.forEach((item) => {
+    const key = getScenarioNodeDedupeKey(item);
+    const previous = deduped.get(key);
+
+    if (!previous || getScenarioNodePriority(item) > getScenarioNodePriority(previous)) {
+      deduped.set(key, item);
+    }
+  });
+
+  return Array.from(deduped.values());
+}
+
+function ScenarioSpotlightCard({ item }: { item: ScenarioNodeOverview }) {
+  const topStocks = item.strongStocks.length ? item.strongStocks : item.summary.commonStocks.slice(0, 5);
+  const etfNames = item.summary.etfStocks.slice(0, 3).map((stock) => stock.name);
+  const referenceNames = [...etfNames, ...item.summary.globalReferences].slice(0, 4);
+  const displayLabel = getCanonicalNodeLabel(item.node.label);
+
+  return (
+    <Link
+      to={`/scenario?scenario=${item.scenario.id}&node=${item.node.id}`}
+      className="group flex min-h-[420px] flex-col rounded-lg border border-radar-line bg-slate-50 p-4 transition hover:border-blue-400 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500 dark:hover:bg-blue-950/25"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-black text-blue-600 dark:text-blue-300">{item.scenario.name}</p>
+          <h3 className="mt-1 break-keep text-xl font-black leading-7 text-radar-ink">{displayLabel}</h3>
+        </div>
+        <span className={cn("shrink-0 rounded-full border px-2.5 py-1 text-xs font-black", getMarketMoveBadgeClass(item.summary.averageChange))}>
+          {formatPercent(item.summary.averageChange)}
+        </span>
+      </div>
+      <p className="mt-3 min-h-[44px] break-keep text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
+        {item.node.description}
+      </p>
+
+      <div className="mt-3 grid grid-cols-4 gap-2 max-sm:grid-cols-2">
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">관련</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{item.summary.relatedCount}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">일반</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{item.summary.commonStocks.length}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">ETF</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{item.summary.etfStocks.length}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">상승비중</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{Math.round(item.summary.breadth)}%</p>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-md bg-white px-3 py-2 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-black text-slate-400">대표 움직임</p>
+          <span className={cn("text-xs font-black", getMarketMoveTextClass(item.summary.averageChange))}>
+            평균 {formatPercent(item.summary.averageChange)}
+          </span>
+        </div>
+        <p className="mt-1 truncate text-sm font-black text-radar-ink">
+          {item.summary.leader ? item.summary.leader.name : "대표 종목 대기"}
+          {item.summary.leader ? (
+            <span className={cn("ml-1", getMarketMoveTextClass(getStockMove(item.summary.leader)))}>
+              {formatPercent(getStockMove(item.summary.leader))}
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="mt-3 rounded-md bg-white p-3 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-black text-radar-ink">강세 후보 종목</p>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+            {topStocks.length}개 표시
+          </span>
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {topStocks.slice(0, 5).map((stock) => (
+            <div key={stock.id} className="flex items-center justify-between gap-3 rounded bg-slate-50 px-2 py-1.5 dark:bg-slate-800">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-black text-radar-ink">{stock.name}</p>
+                <p className="text-[10px] font-bold text-slate-400">
+                  {stock.ticker} · {stock.market}
+                </p>
+              </div>
+              <span className={cn("shrink-0 text-xs font-black", getMarketMoveTextClass(getStockMove(stock)))}>
+                {formatPercent(getStockMove(stock))}
+              </span>
+            </div>
+          ))}
+          {!topStocks.length ? (
+            <div className="rounded bg-slate-50 px-2 py-2 text-xs font-bold text-slate-500 dark:bg-slate-800">
+              강세 후보 종목을 관찰 중입니다.
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {referenceNames.map((name) => (
+          <span key={name} className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300">
+            {name}
+          </span>
+        ))}
+        {!referenceNames.length ? (
+          <span className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-slate-500 dark:bg-slate-900">
+            참고 ETF·해외축 대기
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-auto flex items-center justify-between border-t border-radar-line pt-3 text-xs font-black text-blue-600 dark:border-slate-700 dark:text-blue-300">
+        <span>세부 흐름 보기</span>
+        <ArrowRight size={15} className="transition group-hover:translate-x-1" />
+      </div>
+    </Link>
+  );
+}
+
 function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
-  const spotlightNodes = overviews
-    .flatMap((overview) => overview.topNodes)
-    .sort((a, b) => b.summary.averageChange - a.summary.averageChange)
-    .slice(0, 8);
-  const strongStockCount = new Set(overviews.flatMap((overview) => overview.strongStocks.map((stock) => stock.id))).size;
-  const totalRelatedCount = overviews.reduce((sum, overview) => sum + overview.relatedCount, 0);
-  const averageScenarioMove = overviews.length
-    ? overviews.reduce((sum, overview) => sum + overview.averageChange, 0) / overviews.length
+  const [filterScenarioId, setFilterScenarioId] = useState("all");
+  const filteredOverviews = useMemo(() => {
+    if (filterScenarioId === "all") return overviews;
+    return overviews.filter((overview) => overview.scenario.id === filterScenarioId);
+  }, [filterScenarioId, overviews]);
+  const selectedOverview = filteredOverviews[0];
+  const filterLabel = filterScenarioId === "all" ? "전체 산업" : selectedOverview?.scenario.name ?? "선택 산업";
+  const spotlightNodes = useMemo(
+    () => {
+      const uniqueNodes = dedupeScenarioNodeOverviews(
+        filteredOverviews.flatMap((overview) => overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0))
+      );
+
+      return uniqueNodes
+        .sort((a, b) => {
+          const strongDiff = b.strongStocks.length - a.strongStocks.length;
+          if (strongDiff) return strongDiff;
+          const changeDiff = b.summary.averageChange - a.summary.averageChange;
+          if (changeDiff) return changeDiff;
+          return b.summary.relatedCount - a.summary.relatedCount;
+        })
+        .slice(0, filterScenarioId === "all" ? 16 : 18);
+    },
+    [filterScenarioId, filteredOverviews]
+  );
+  const strongStockCount = new Set(filteredOverviews.flatMap((overview) => overview.strongStocks.map((stock) => stock.id))).size;
+  const totalRelatedCount = filteredOverviews.reduce((sum, overview) => sum + overview.relatedCount, 0);
+  const visibleSectorCount = dedupeScenarioNodeOverviews(
+    filteredOverviews.flatMap((overview) => overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0))
+  ).length;
+  const averageScenarioMove = filteredOverviews.length
+    ? filteredOverviews.reduce((sum, overview) => sum + overview.averageChange, 0) / filteredOverviews.length
     : 0;
 
   return (
@@ -765,31 +982,57 @@ function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
           <div className="max-w-3xl">
             <p className="text-sm font-black text-blue-600 dark:text-blue-300">산업 시나리오 메인</p>
             <h2 className="mt-2 text-2xl font-black leading-tight text-radar-ink">
-              대표 산업의 방향과 세부 섹터 강세를 먼저 봅니다
+              세부 섹터 강세와 전환 흐름을 먼저 봅니다
             </h2>
             <p className="mt-2 break-keep text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
-              산업 카드를 선택하면 해당 산업의 세부 시나리오 화면으로 이동합니다. 관련종목은 각 세부 섹터에서 상대적으로 강한 종목만 모아 보여줍니다.
+              드롭다운으로 산업을 좁혀 보고, 세부 섹터 카드를 선택하면 해당 산업의 상세 흐름으로 이동합니다. 관련종목은 세부 섹터 안에서 상대적으로 강한 종목만 먼저 보여줍니다.
             </p>
           </div>
-          <div className="grid min-w-[520px] grid-cols-4 gap-2 max-xl:min-w-0 max-xl:flex-1 max-sm:grid-cols-2">
-            <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
-              <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">대표 산업</p>
-              <p className="mt-1 text-xl font-black text-radar-ink">{overviews.length}</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
-              <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">관련 종목</p>
-              <p className="mt-1 text-xl font-black text-radar-ink">{totalRelatedCount}</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
-              <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">강세 후보</p>
-              <p className="mt-1 text-xl font-black text-radar-ink">{strongStockCount}</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
-              <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">평균 흐름</p>
-              <p className={cn("mt-1 text-xl font-black", getMarketMoveTextClass(averageScenarioMove))}>
-                {formatPercent(averageScenarioMove)}
-              </p>
-            </div>
+          <div className="min-w-[340px] max-w-md flex-1 max-sm:min-w-0">
+            <label className="text-xs font-black text-slate-500 dark:text-slate-400" htmlFor="scenario-main-filter">
+              산업 시나리오 선택
+            </label>
+            <select
+              id="scenario-main-filter"
+              value={filterScenarioId}
+              onChange={(event) => setFilterScenarioId(event.target.value)}
+              className="mt-2 h-11 w-full rounded-lg border border-radar-line bg-white px-3 text-sm font-black text-radar-ink outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950"
+            >
+              <option value="all">전체 산업 시나리오</option>
+              {overviews.map((overview) => (
+                <option key={overview.scenario.id} value={overview.scenario.id}>
+                  {overview.scenario.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+              선택한 범위: <span className="font-black text-radar-ink">{filterLabel}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-5 gap-2 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
+          <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
+            <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">산업군</p>
+            <p className="mt-1 text-xl font-black text-radar-ink">{filteredOverviews.length}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
+            <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">세부 섹터</p>
+            <p className="mt-1 text-xl font-black text-radar-ink">{visibleSectorCount}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
+            <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">관련 종목</p>
+            <p className="mt-1 text-xl font-black text-radar-ink">{totalRelatedCount}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
+            <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">강세 후보</p>
+            <p className="mt-1 text-xl font-black text-radar-ink">{strongStockCount}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800">
+            <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">평균 흐름</p>
+            <p className={cn("mt-1 text-xl font-black", getMarketMoveTextClass(averageScenarioMove))}>
+              {formatPercent(averageScenarioMove)}
+            </p>
           </div>
         </div>
       </section>
@@ -799,135 +1042,20 @@ function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
           <div>
             <h2 className="text-lg font-black text-radar-ink">오늘 눈에 띄는 세부 섹터</h2>
             <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
-              대표 산업 안에서 상대적으로 버티거나 강하게 움직인 세부 섹터입니다.
+              {filterLabel} 안에서 움직임이 큰 세부 섹터를 넓은 카드로 펼쳐 봅니다. 종목 구성, 강세 후보, ETF/해외 참고축까지 한 번에 확인합니다.
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
             세부 섹터 {spotlightNodes.length}
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-4 gap-3 max-2xl:grid-cols-3 max-xl:grid-cols-2 max-md:grid-cols-1">
+        <div className="mt-4 grid grid-cols-3 gap-4 max-2xl:grid-cols-2 max-lg:grid-cols-1">
           {spotlightNodes.map((item) => (
-            <Link
-              key={`${item.scenario.id}-${item.node.id}`}
-              to={`/scenario?scenario=${item.scenario.id}&node=${item.node.id}`}
-              className="rounded-lg border border-radar-line bg-slate-50 p-4 transition hover:border-blue-400 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500 dark:hover:bg-blue-950/25"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[11px] font-black text-blue-600 dark:text-blue-300">{item.scenario.name}</p>
-                  <h3 className="mt-1 break-keep text-base font-black leading-5 text-radar-ink">{item.node.label}</h3>
-                </div>
-                <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-black", getMarketMoveBadgeClass(item.summary.averageChange))}>
-                  {formatPercent(item.summary.averageChange)}
-                </span>
-              </div>
-              <p className="mt-3 line-clamp-2 break-keep text-xs font-bold leading-5 text-slate-500 dark:text-slate-400">
-                {item.node.description}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {item.strongStocks.slice(0, 3).map((stock) => (
-                  <span key={stock.id} className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-radar-ink dark:bg-slate-900">
-                    {stock.name}{" "}
-                    <span className={cn(getMarketMoveTextClass(getStockMove(stock)))}>
-                      {formatPercent(getStockMove(stock))}
-                    </span>
-                  </span>
-                ))}
-                {!item.strongStocks.length ? (
-                  <span className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-slate-500 dark:bg-slate-900">
-                    강세 후보 대기
-                  </span>
-                ) : null}
-              </div>
-            </Link>
+            <ScenarioSpotlightCard key={`${item.scenario.id}-${item.node.id}`} item={item} />
           ))}
         </div>
       </section>
 
-      <section className="rounded-lg border border-radar-line bg-white p-5 shadow-card dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-black text-radar-ink">대표 산업 시나리오</h2>
-            <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
-              산업별 핵심 밸류체인과 세부 섹터 강세 종목을 한 장에서 비교합니다.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-4 max-2xl:grid-cols-2 max-lg:grid-cols-1">
-          {overviews.map((overview) => (
-            <Link
-              key={overview.scenario.id}
-              to={`/scenario?scenario=${overview.scenario.id}&node=${overview.entryNode.id}`}
-              className="group flex min-h-[320px] flex-col rounded-lg border border-radar-line bg-slate-50 p-4 transition hover:border-blue-400 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500 dark:hover:bg-blue-950/25"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black text-blue-600 dark:text-blue-300">대표 산업</p>
-                  <h3 className="mt-1 break-keep text-xl font-black leading-7 text-radar-ink">{overview.scenario.name}</h3>
-                </div>
-                <span className={cn("shrink-0 rounded-full border px-2.5 py-1 text-xs font-black", getFlowStatusTone(overview.status))}>
-                  {overview.status}
-                </span>
-              </div>
-              <p className="mt-3 line-clamp-2 break-keep text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
-                {overview.scenario.description}
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-                <span className="rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
-                  관련
-                  <strong className="mt-1 block text-base text-radar-ink">{overview.relatedCount}</strong>
-                </span>
-                <span className="rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
-                  평균
-                  <strong className={cn("mt-1 block text-base", getMarketMoveTextClass(overview.averageChange))}>
-                    {formatPercent(overview.averageChange)}
-                  </strong>
-                </span>
-                <span className="rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
-                  강세 후보
-                  <strong className="mt-1 block text-base text-radar-ink">{overview.strongStocks.length}</strong>
-                </span>
-              </div>
-              <div className="mt-4">
-                <p className="text-xs font-black text-slate-500 dark:text-slate-400">세부 섹터 흐름</p>
-                <div className="mt-2 space-y-2">
-                  {overview.topNodes.slice(0, 3).map((item) => (
-                    <div key={item.node.id} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold dark:bg-slate-900">
-                      <span className="min-w-0 truncate text-radar-ink">{item.node.label}</span>
-                      <span className={cn("shrink-0 font-black", getMarketMoveTextClass(item.summary.averageChange))}>
-                        {formatPercent(item.summary.averageChange)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4">
-                <p className="text-xs font-black text-slate-500 dark:text-slate-400">관련 강세종목</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {overview.strongStocks.slice(0, 5).map((stock) => (
-                    <span key={stock.id} className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-radar-ink dark:bg-slate-900">
-                      {stock.name}{" "}
-                      <span className={cn(getMarketMoveTextClass(getStockMove(stock)))}>
-                        {formatPercent(getStockMove(stock))}
-                      </span>
-                    </span>
-                  ))}
-                  {!overview.strongStocks.length ? (
-                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-black text-slate-500 dark:bg-slate-900">
-                      강세 후보 대기
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <div className="mt-auto flex items-center justify-between gap-3 border-t border-radar-line pt-4 text-xs font-black text-blue-600 dark:border-slate-700 dark:text-blue-300">
-                <span>{overview.entryNode.label}부터 보기</span>
-                <ArrowRight size={16} className="transition group-hover:translate-x-1" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

@@ -162,7 +162,7 @@ export const representativeChangeHistory: RepresentativeChangeHistory[] = [
     reason: "북미 변압기 수주잔고와 마진 가시성이 대표성 판단을 끌어올렸습니다."
   },
   {
-    chainName: "로봇 액츄에이터",
+    chainName: "로봇 액추에이터",
     date: "2026-05-18",
     from: "에스피지",
     to: "로보티즈",
