@@ -1,4 +1,4 @@
-import type { FinalDecision, Stock } from "../types/stock";
+import type { FinalDecision, Stock } from "../types/stock.js";
 
 const clamp = (value: number, min = 0, max = 100) =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));

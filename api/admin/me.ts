@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
-import { verifyAdminSession } from "../../server/adminAuth";
-import { sendJson, type ServerlessRequest } from "../../server/serverlessUtils";
+import { verifyAdminSession } from "../../server/adminAuth.js";
+import { sendJson, type ServerlessRequest } from "../../server/serverlessUtils.js";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {
   if (req.method !== "GET") {

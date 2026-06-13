@@ -1,5 +1,5 @@
-import type { Quote } from "../types/marketData";
-import type { Stock } from "../types/stock";
+import type { Quote } from "../types/marketData.js";
+import type { Stock } from "../types/stock.js";
 
 export function getReferenceQuote(symbol: string, stock?: Stock): Quote {
   return {

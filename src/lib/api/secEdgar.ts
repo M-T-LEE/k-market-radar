@@ -1,4 +1,4 @@
-import { createRateLimiter, type RateLimiter } from "./rateLimiter";
+import { createRateLimiter, type RateLimiter } from "./rateLimiter.js";
 
 // Server-side client scaffold. Do not import this directly into React UI code:
 // browsers do not allow applications to set User-Agent or Accept-Encoding.

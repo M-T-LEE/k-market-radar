@@ -1,5 +1,5 @@
-import { buildMarketDataSnapshot } from "../server/api";
-import { apiErrorMessage, sendJson, type ServerlessRequest } from "../server/serverlessUtils";
+import { buildMarketDataSnapshot } from "../server/api.js";
+import { apiErrorMessage, sendJson, type ServerlessRequest } from "../server/serverlessUtils.js";
 import type { ServerResponse } from "node:http";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {

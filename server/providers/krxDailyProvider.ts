@@ -1,6 +1,6 @@
-import type { MarketIndexSnapshot } from "../../src/types/marketData";
-import type { DomesticQuote, KrxDailyData, KrxRow } from "./types";
-import { numeric, recentBusinessDates, toKoreanMarketCap } from "./utils";
+import type { MarketIndexSnapshot } from "../../src/types/marketData.js";
+import type { DomesticQuote, KrxDailyData, KrxRow } from "./types.js";
+import { numeric, recentBusinessDates, toKoreanMarketCap } from "./utils.js";
 
 async function fetchKrxRows(endpoint: string, key: string) {
   let lastError = "";

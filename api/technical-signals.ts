@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
-import { apiErrorMessage, apiErrorStatus, readJsonRequestBody, sendJson, type ServerlessRequest } from "../server/serverlessUtils";
-import { getTechnicalSignalsPayload } from "../server/api";
-import type { TechnicalSignalKind } from "../src/types/stock";
+import { apiErrorMessage, apiErrorStatus, readJsonRequestBody, sendJson, type ServerlessRequest } from "../server/serverlessUtils.js";
+import { getTechnicalSignalsPayload } from "../server/api.js";
+import type { TechnicalSignalKind } from "../src/types/stock.js";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {
   if (req.method !== "POST") {

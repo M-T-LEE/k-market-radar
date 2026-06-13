@@ -1,7 +1,7 @@
-import type { Alert } from "../../src/types/portfolio";
-import type { Stock } from "../../src/types/stock";
-import type { Env } from "./types";
-import { fetchJson } from "./utils";
+import type { Alert } from "../../src/types/portfolio.js";
+import type { Stock } from "../../src/types/stock.js";
+import type { Env } from "./types.js";
+import { fetchJson } from "./utils.js";
 
 function toAlertCondition(reportName = ""): Alert["condition"] {
   if (reportName.includes("전환사채") || reportName.includes("CB")) return "전환사채 발행";

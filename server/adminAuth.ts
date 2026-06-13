@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { loadServerEnv, type ServerEnv } from "./runtimeEnv";
+import { loadServerEnv, type ServerEnv } from "./runtimeEnv.js";
 
 const ADMIN_COOKIE_NAME = "k_market_radar_admin";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;

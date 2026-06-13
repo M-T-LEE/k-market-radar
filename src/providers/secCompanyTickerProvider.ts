@@ -1,5 +1,5 @@
-import { SEC_DEFAULT_ACCEPT_ENCODING, SEC_MAX_REQUESTS_PER_SECOND, SecEdgarClient } from "../lib/api/secEdgar";
-import type { Stock } from "../types/stock";
+import { SEC_DEFAULT_ACCEPT_ENCODING, SEC_MAX_REQUESTS_PER_SECOND, SecEdgarClient } from "../lib/api/secEdgar.js";
+import type { Stock } from "../types/stock.js";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const SEC_COMPANY_TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json";

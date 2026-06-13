@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
-import { getDomesticQuotePayload } from "../../../server/api";
-import { apiErrorMessage, apiErrorStatus, getQueryValue, sendJson, type ServerlessRequest } from "../../../server/serverlessUtils";
+import { getDomesticQuotePayload } from "../../../server/api.js";
+import { apiErrorMessage, apiErrorStatus, getQueryValue, sendJson, type ServerlessRequest } from "../../../server/serverlessUtils.js";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {
   if (req.method !== "GET") {

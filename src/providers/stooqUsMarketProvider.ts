@@ -1,13 +1,13 @@
-import { createStockFromUniverseQuote } from "../lib/stockUniverseFactory";
-import type { MarketIndexSnapshot } from "../types/marketData";
-import type { Stock } from "../types/stock";
+import { createStockFromUniverseQuote } from "../lib/stockUniverseFactory.js";
+import type { MarketIndexSnapshot } from "../types/marketData.js";
+import type { Stock } from "../types/stock.js";
 import {
   largeCapSymbols,
   referenceExchanges,
   referenceMarketCapsUsd,
   referenceNames
-} from "./fmpUniverseProvider";
-import { parseNumber } from "./providerUtils";
+} from "./fmpUniverseProvider.js";
+import { parseNumber } from "./providerUtils.js";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const STOOQ_BATCH_CHUNK_SIZE = 80;

@@ -1,4 +1,4 @@
-import type { Stock, ValuationPoint } from "../types/stock";
+import type { Stock, ValuationPoint } from "../types/stock.js";
 
 // 초기 종목 유니버스와 계산 로직 연결을 위한 기준 데이터입니다.
 // 실제 투자 판단, 매수/매도 추천, 체결 판단 또는 공식 재무 데이터로 사용하면 안 됩니다.

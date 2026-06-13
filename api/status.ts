@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import { sendJson, type ServerlessRequest } from "../server/serverlessUtils";
+import { sendJson, type ServerlessRequest } from "../server/serverlessUtils.js";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {
   if (req.method !== "GET") {

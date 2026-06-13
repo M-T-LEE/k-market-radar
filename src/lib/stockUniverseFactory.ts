@@ -1,5 +1,5 @@
-import { calculateFinalScore, calculatePreReflectionRisk, getFinalDecision } from "./scoring";
-import type { Market, Stock, Theme, ValuationPoint, ValuationStatus } from "../types/stock";
+import { calculateFinalScore, calculatePreReflectionRisk, getFinalDecision } from "./scoring.js";
+import type { Market, Stock, Theme, ValuationPoint, ValuationStatus } from "../types/stock.js";
 
 export type UniverseAssetType = "COMMON" | "PREFERRED" | "ETF" | "ADR" | "UNKNOWN";
 

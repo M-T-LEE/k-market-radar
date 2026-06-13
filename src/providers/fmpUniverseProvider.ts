@@ -1,6 +1,6 @@
-import { createStockFromUniverseQuote } from "../lib/stockUniverseFactory";
-import type { Stock } from "../types/stock";
-import { parseNumber } from "./providerUtils";
+import { createStockFromUniverseQuote } from "../lib/stockUniverseFactory.js";
+import type { Stock } from "../types/stock.js";
+import { parseNumber } from "./providerUtils.js";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const MIN_US_MARKET_CAP_USD = 10_000_000_000;

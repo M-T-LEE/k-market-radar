@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ApiRouteError } from "./apiError";
+import { ApiRouteError } from "./apiError.js";
 
 export type ServerlessRequest = IncomingMessage & {
   body?: unknown;

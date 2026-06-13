@@ -1,4 +1,4 @@
-import type { Theme } from "./stock";
+import type { Theme } from "./stock.js";
 
 export interface ScenarioNode {
   id: string;

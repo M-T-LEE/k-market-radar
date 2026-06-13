@@ -1,6 +1,6 @@
-import type { Quote } from "../types/marketData";
-import type { Stock } from "../types/stock";
-import { getRuntimeEnv, parseNumber, toKoreanMarketCapUnit } from "./providerUtils";
+import type { Quote } from "../types/marketData.js";
+import type { Stock } from "../types/stock.js";
+import { getRuntimeEnv, parseNumber, toKoreanMarketCapUnit } from "./providerUtils.js";
 
 type KrxRow = Record<string, string>;
 

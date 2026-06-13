@@ -1,12 +1,12 @@
-import { getKrxDailyQuote } from "../providers/krxDailyProvider";
-import { getReferenceQuote } from "../providers/referenceQuoteProvider";
+import { getKrxDailyQuote } from "../providers/krxDailyProvider.js";
+import { getReferenceQuote } from "../providers/referenceQuoteProvider.js";
 import {
   getNaverDelayedQuote,
   getNaverDelayedQuotes,
   getQuoteWithFallback
-} from "../providers/naverDelayedQuoteProvider";
-import type { Quote } from "../types/marketData";
-import type { Stock } from "../types/stock";
+} from "../providers/naverDelayedQuoteProvider.js";
+import type { Quote } from "../types/marketData.js";
+import type { Stock } from "../types/stock.js";
 
 export type MarketDataRoute =
   | "DOMESTIC_QUOTE"

@@ -1,6 +1,6 @@
-import type { MarketIndexSnapshot } from "../../src/types/marketData";
-import type { Alert } from "../../src/types/portfolio";
-import type { Stock } from "../../src/types/stock";
+import type { MarketIndexSnapshot } from "../../src/types/marketData.js";
+import type { Alert } from "../../src/types/portfolio.js";
+import type { Stock } from "../../src/types/stock.js";
 
 export type Env = Record<string, string | undefined>;
 export type KrxRow = Record<string, string>;

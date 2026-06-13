@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
-import { createAdminLoginResult } from "../../server/adminAuth";
-import { apiErrorMessage, readJsonRequestBody, sendJson, type ServerlessRequest } from "../../server/serverlessUtils";
+import { createAdminLoginResult } from "../../server/adminAuth.js";
+import { apiErrorMessage, readJsonRequestBody, sendJson, type ServerlessRequest } from "../../server/serverlessUtils.js";
 
 export default async function handler(req: ServerlessRequest, res: ServerResponse) {
   if (req.method !== "POST") {
@@ -12,7 +12,7 @@ export default async function handler(req: ServerlessRequest, res: ServerRespons
     const body = await readJsonRequestBody<{ password?: string }>(req);
     const result = createAdminLoginResult(String(body.password ?? ""));
 
-    if (!result.ok) {
+    if ("status" in result) {
       sendJson(res, result.status, result.body);
       return;
     }

@@ -1,5 +1,5 @@
-import type { Alert, Issue } from "./portfolio";
-import type { Stock } from "./stock";
+import type { Alert, Issue } from "./portfolio.js";
+import type { Stock } from "./stock.js";
 
 export type DataSourceState = "live" | "partial" | "fallback" | "error" | "disabled";
 

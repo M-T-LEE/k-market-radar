@@ -1,4 +1,4 @@
-import type { StockTechnicalSignal, TechnicalSignalKind } from "../types/stock";
+import type { StockTechnicalSignal, TechnicalSignalKind } from "../types/stock.js";
 
 type DailyCandle = {
   date: string;

@@ -1,5 +1,5 @@
-import type { MarketIndexSnapshot } from "../types/marketData";
-import { parseNumber } from "./providerUtils";
+import type { MarketIndexSnapshot } from "../types/marketData.js";
+import { parseNumber } from "./providerUtils.js";
 
 const CACHE_TTL_MS = 60 * 1000;
 const cache = new Map<string, { expiresAt: number; index: MarketIndexSnapshot }>();

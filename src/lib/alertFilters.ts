@@ -1,5 +1,5 @@
-import type { Alert } from "../types/portfolio";
-import type { Stock } from "../types/stock";
+import type { Alert } from "../types/portfolio.js";
+import type { Stock } from "../types/stock.js";
 
 const TARGET_PRICE_NEAR_RATIO = 0.08;
 

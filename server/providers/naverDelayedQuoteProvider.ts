@@ -1,6 +1,6 @@
-import type { Stock } from "../../src/types/stock";
-import type { DomesticQuote } from "./types";
-import { fetchJson, numeric, parseKoreanNumber, toKoreanMarketCap } from "./utils";
+import type { Stock } from "../../src/types/stock.js";
+import type { DomesticQuote } from "./types.js";
+import { fetchJson, numeric, parseKoreanNumber, toKoreanMarketCap } from "./utils.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MIN_SYMBOL_INTERVAL_MS = 12 * 1000;

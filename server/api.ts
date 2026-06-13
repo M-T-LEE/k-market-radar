@@ -1,22 +1,22 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ViteDevServer } from "vite";
-import { alerts as fallbackAlerts, issues as fallbackIssues } from "../src/data/issues";
-import { stocks as fallbackStocks } from "../src/data/stocks";
-import { filterActionableAlerts } from "../src/lib/alertFilters";
-import { getDomesticQuotes, getNaverDelayedQuote, getQuoteWithFallback, isDomesticStock } from "../src/lib/marketDataRouter";
-import { getFmpUsUniverseResult, getReferenceUsUniverse, largeCapSymbols } from "../src/providers/fmpUniverseProvider";
-import { getNaverDelayedIndices } from "../src/providers/naverDelayedIndexProvider";
-import { getNaverHistoricalTechnicalSignalsBatch } from "../src/providers/naverHistoricalPriceProvider";
-import { getNaverDomesticUniverse } from "../src/providers/naverUniverseProvider";
-import { enrichUsStocksWithSecMetadata, getSecCompanyTickerMap } from "../src/providers/secCompanyTickerProvider";
-import { getStooqUsIndices, getStooqUsUniverseResult } from "../src/providers/stooqUsMarketProvider";
-import type { MarketDataSnapshot, MarketDataSourceStatus, MarketIndexSnapshot, Quote } from "../src/types/marketData";
-import type { Alert, Issue } from "../src/types/portfolio";
-import type { Stock, TechnicalSignalKind } from "../src/types/stock";
-import { ApiRouteError } from "./apiError";
-import { createAdminLoginResult, createAdminLogoutCookie, verifyAdminSession } from "./adminAuth";
-import { dartDisclosureProvider } from "./providers/dartDisclosureProvider";
-import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv";
+import { alerts as fallbackAlerts, issues as fallbackIssues } from "../src/data/issues.js";
+import { stocks as fallbackStocks } from "../src/data/stocks.js";
+import { filterActionableAlerts } from "../src/lib/alertFilters.js";
+import { getDomesticQuotes, getNaverDelayedQuote, getQuoteWithFallback, isDomesticStock } from "../src/lib/marketDataRouter.js";
+import { getFmpUsUniverseResult, getReferenceUsUniverse, largeCapSymbols } from "../src/providers/fmpUniverseProvider.js";
+import { getNaverDelayedIndices } from "../src/providers/naverDelayedIndexProvider.js";
+import { getNaverHistoricalTechnicalSignalsBatch } from "../src/providers/naverHistoricalPriceProvider.js";
+import { getNaverDomesticUniverse } from "../src/providers/naverUniverseProvider.js";
+import { enrichUsStocksWithSecMetadata, getSecCompanyTickerMap } from "../src/providers/secCompanyTickerProvider.js";
+import { getStooqUsIndices, getStooqUsUniverseResult } from "../src/providers/stooqUsMarketProvider.js";
+import type { MarketDataSnapshot, MarketDataSourceStatus, MarketIndexSnapshot, Quote } from "../src/types/marketData.js";
+import type { Alert, Issue } from "../src/types/portfolio.js";
+import type { Stock, TechnicalSignalKind } from "../src/types/stock.js";
+import { ApiRouteError } from "./apiError.js";
+import { createAdminLoginResult, createAdminLogoutCookie, verifyAdminSession } from "./adminAuth.js";
+import { dartDisclosureProvider } from "./providers/dartDisclosureProvider.js";
+import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const WARNING_LIMIT = 8;
@@ -941,7 +941,7 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       const body = await readJsonBody<{ password?: string }>(req);
       const result = createAdminLoginResult(String(body.password ?? ""));
 
-      if (!result.ok) {
+      if ("status" in result) {
         jsonResponse(res, result.status, result.body);
         return;
       }

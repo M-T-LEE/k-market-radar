@@ -1,7 +1,7 @@
-import type { Quote } from "../types/marketData";
-import { parseKoreanAmount, parseNumber, toKoreanMarketCapUnit } from "./providerUtils";
-import { getKrxDailyQuote } from "./krxDailyProvider";
-import { getReferenceQuote } from "./referenceQuoteProvider";
+import type { Quote } from "../types/marketData.js";
+import { parseKoreanAmount, parseNumber, toKoreanMarketCapUnit } from "./providerUtils.js";
+import { getKrxDailyQuote } from "./krxDailyProvider.js";
+import { getReferenceQuote } from "./referenceQuoteProvider.js";
 
 const CACHE_TTL_MS = 60 * 1000;
 const cache = new Map<string, { expiresAt: number; quote: Quote }>();

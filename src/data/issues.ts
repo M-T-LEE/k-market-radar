@@ -1,4 +1,4 @@
-import type { Alert, Issue } from "../types/portfolio";
+import type { Alert, Issue } from "../types/portfolio.js";
 
 // 보유종목 이슈 모니터링 화면을 위한 기준 데이터입니다.
 export const issues: Issue[] = [

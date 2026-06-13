@@ -1,6 +1,6 @@
-import { createStockFromUniverseQuote, type UniverseAssetType } from "../lib/stockUniverseFactory";
-import type { Stock } from "../types/stock";
-import { parseNumber, toKoreanMarketCapUnit } from "./providerUtils";
+import { createStockFromUniverseQuote, type UniverseAssetType } from "../lib/stockUniverseFactory.js";
+import type { Stock } from "../types/stock.js";
+import { parseNumber, toKoreanMarketCapUnit } from "./providerUtils.js";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const PAGE_SIZE = 20;
