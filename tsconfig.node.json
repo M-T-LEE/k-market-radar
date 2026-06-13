@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "server/**/*.ts", "tailwind.config.js", "postcss.config.js"]
+  "include": ["vite.config.ts", "server/**/*.ts", "api/**/*.ts", "tailwind.config.js", "postcss.config.js"]
 }

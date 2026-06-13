@@ -47,6 +47,7 @@ window.addEventListener("unhandledrejection", (event) => {
 
 async function bootstrap() {
   const rootElement = document.getElementById("root");
+  const basename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
 
   if (!rootElement) {
     throw new Error("React root element #root not found.");
@@ -56,7 +57,7 @@ async function bootstrap() {
 
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <App />
       </BrowserRouter>
     </React.StrictMode>

@@ -1,4 +1,5 @@
 import { Database, KeyRound, Moon, PlugZap, ShieldCheck } from "lucide-react";
+import { useAdminAuth } from "../context/AdminAuthContext";
 import { useMarketData } from "../context/MarketDataContext";
 import { useTheme } from "../context/ThemeContext";
 import { apiCredentialChecklist } from "../lib/api/env";
@@ -48,9 +49,27 @@ function getCredentialRuntimeStatus(key: string, sourceStatus: MarketDataSourceS
 export default function Settings() {
   const { sourceStatus, warnings } = useMarketData();
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAdminAuth();
 
   return (
     <div className="grid grid-cols-2 gap-5 max-xl:grid-cols-1">
+      <section className="col-span-2 flex items-center justify-between rounded-lg border border-radar-line bg-white p-5 shadow-card max-xl:col-span-1 dark:border-slate-700 dark:bg-slate-900">
+        <div>
+          <p className="text-sm font-black text-blue-600 dark:text-blue-300">관리자 세션</p>
+          <h2 className="mt-1 text-xl font-black text-radar-ink dark:text-slate-100">설정 화면 접근이 허용되었습니다.</h2>
+          <p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-400">
+            API 상태와 표시 정책은 관리자에게만 노출됩니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="rounded-lg border border-radar-line bg-slate-50 px-4 py-2 text-sm font-black text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        >
+          로그아웃
+        </button>
+      </section>
+
       <section className="rounded-lg border border-radar-line bg-white p-6 shadow-card">
         <div className="flex items-center gap-3">
           <span className="rounded-lg bg-blue-50 p-3 text-blue-600">

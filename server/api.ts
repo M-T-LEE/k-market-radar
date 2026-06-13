@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ViteDevServer } from "vite";
 import { alerts as fallbackAlerts, issues as fallbackIssues } from "../src/data/issues";
@@ -15,7 +13,10 @@ import { getStooqUsIndices, getStooqUsUniverseResult } from "../src/providers/st
 import type { MarketDataSnapshot, MarketDataSourceStatus, MarketIndexSnapshot, Quote } from "../src/types/marketData";
 import type { Alert, Issue } from "../src/types/portfolio";
 import type { Stock, TechnicalSignalKind } from "../src/types/stock";
+import { ApiRouteError } from "./apiError";
+import { createAdminLoginResult, createAdminLogoutCookie, verifyAdminSession } from "./adminAuth";
 import { dartDisclosureProvider } from "./providers/dartDisclosureProvider";
+import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const WARNING_LIMIT = 8;
@@ -32,32 +33,8 @@ const usSymbols = new Map<string, string>([
   ["crowdstrike", "CRWD"]
 ]);
 
-type Env = Record<string, string | undefined>;
 type KrxRow = Record<string, string>;
 type KrxRowsResponse = { basDd: string; rows: KrxRow[] };
-
-function loadEnv(): Env {
-  const envPath = resolve(process.cwd(), ".env.local");
-  const entries: Env = {};
-
-  try {
-    const contents = readFileSync(envPath, "utf8");
-    contents
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .forEach((line) => {
-        const index = line.indexOf("=");
-        if (index > -1) {
-          entries[line.slice(0, index)] = line.slice(index + 1);
-        }
-      });
-  } catch {
-    return process.env as Env;
-  }
-
-  return { ...(process.env as Env), ...entries };
-}
 
 function numeric(value: unknown) {
   if (typeof value === "number") return value;
@@ -552,12 +529,12 @@ function setStooqStatus(sourceStatus: MarketDataSourceStatus, failuresLength: nu
   sourceStatus.stooqQuoteProvider = failuresLength ? "partial" : "live";
 }
 
-async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
+export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   if (cachedSnapshot && cachedSnapshot.expiresAt > Date.now()) {
     return cachedSnapshot.data;
   }
 
-  const env = loadEnv();
+  const env = loadServerEnv();
   const warnings: string[] = [];
   let stocks = fallbackStocks;
   let issues = fallbackIssues;
@@ -838,6 +815,48 @@ async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   return data;
 }
 
+export async function getTechnicalSignalsPayload(input: {
+  symbols?: string[];
+  kind?: TechnicalSignalKind;
+  windowDays?: number;
+}) {
+  const symbols = Array.isArray(input.symbols) ? input.symbols.slice(0, 2500) : [];
+  const windowDays = Math.min(60, Math.max(1, Number(input.windowDays) || 10));
+
+  if (!symbols.length) {
+    throw new ApiRouteError(400, "symbols are required");
+  }
+
+  return getNaverHistoricalTechnicalSignalsBatch(symbols, {
+    kind: input.kind,
+    windowDays
+  });
+}
+
+export async function getNaverQuotePayload(symbol: string) {
+  if (!symbol) {
+    throw new ApiRouteError(400, "symbol is required");
+  }
+
+  return getNaverDelayedQuote(symbol);
+}
+
+export async function getDomesticQuotePayload(symbol: string) {
+  if (!symbol) {
+    throw new ApiRouteError(400, "symbol is required");
+  }
+
+  return getQuoteWithFallback(symbol);
+}
+
+function routeErrorStatus(error: unknown, fallbackStatus = 500) {
+  return error instanceof ApiRouteError ? error.status : fallbackStatus;
+}
+
+function routeErrorMessage(error: unknown, fallbackMessage: string) {
+  return error instanceof Error ? error.message : fallbackMessage;
+}
+
 export function registerApiRoutes(viteServer: ViteDevServer) {
   viteServer.middlewares.use("/api/technical-signals", async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method !== "POST") {
@@ -851,22 +870,11 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
         kind?: TechnicalSignalKind;
         windowDays?: number;
       }>(req);
-      const symbols = Array.isArray(body.symbols) ? body.symbols.slice(0, 2500) : [];
-      const windowDays = Math.min(60, Math.max(1, Number(body.windowDays) || 10));
-
-      if (!symbols.length) {
-        jsonResponse(res, 400, { error: "symbols are required" });
-        return;
-      }
-
-      const data = await getNaverHistoricalTechnicalSignalsBatch(symbols, {
-        kind: body.kind,
-        windowDays
-      });
+      const data = await getTechnicalSignalsPayload(body);
       jsonResponse(res, 200, data);
     } catch (error) {
-      jsonResponse(res, 500, {
-        error: error instanceof Error ? error.message : "Technical signal verification failed"
+      jsonResponse(res, routeErrorStatus(error), {
+        error: routeErrorMessage(error, "Technical signal verification failed")
       });
     }
   });
@@ -879,11 +887,11 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
     }
 
     try {
-      const quote = await getNaverDelayedQuote(symbol);
+      const quote = await getNaverQuotePayload(symbol);
       jsonResponse(res, 200, quote);
     } catch (error) {
-      jsonResponse(res, 502, {
-        error: error instanceof Error ? error.message : "Naver delayed quote failed"
+      jsonResponse(res, routeErrorStatus(error, 502), {
+        error: routeErrorMessage(error, "Naver delayed quote failed")
       });
     }
   });
@@ -896,11 +904,11 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
     }
 
     try {
-      const quote = await getQuoteWithFallback(symbol);
+      const quote = await getDomesticQuotePayload(symbol);
       jsonResponse(res, 200, quote);
     } catch (error) {
-      jsonResponse(res, 500, {
-        error: error instanceof Error ? error.message : "Domestic quote failed"
+      jsonResponse(res, routeErrorStatus(error), {
+        error: routeErrorMessage(error, "Domestic quote failed")
       });
     }
   });
@@ -921,5 +929,51 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       ok: true,
       generatedAt: new Date().toISOString()
     });
+  });
+
+  viteServer.middlewares.use("/api/admin/login", async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "POST") {
+      jsonResponse(res, 405, { error: "POST method is required" });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody<{ password?: string }>(req);
+      const result = createAdminLoginResult(String(body.password ?? ""));
+
+      if (!result.ok) {
+        jsonResponse(res, result.status, result.body);
+        return;
+      }
+
+      res.setHeader("Set-Cookie", result.cookie);
+      jsonResponse(res, 200, result.body);
+    } catch (error) {
+      jsonResponse(res, 400, {
+        authenticated: false,
+        error: routeErrorMessage(error, "관리자 로그인 요청을 처리하지 못했습니다.")
+      });
+    }
+  });
+
+  viteServer.middlewares.use("/api/admin/me", async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "GET") {
+      jsonResponse(res, 405, { error: "GET method is required" });
+      return;
+    }
+
+    jsonResponse(res, 200, {
+      authenticated: verifyAdminSession(req.headers.cookie)
+    });
+  });
+
+  viteServer.middlewares.use("/api/admin/logout", async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "POST") {
+      jsonResponse(res, 405, { error: "POST method is required" });
+      return;
+    }
+
+    res.setHeader("Set-Cookie", createAdminLogoutCookie());
+    jsonResponse(res, 200, { authenticated: false });
   });
 }

@@ -2,8 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { registerApiRoutes } from "./server/api";
 
+const isGithubPages = process.env.GITHUB_PAGES === "true";
+
 export default defineConfig({
-  base: "/k-market-radar/",
+  base: isGithubPages ? "/k-market-radar/" : "/",
   plugins: [
     react(),
     {

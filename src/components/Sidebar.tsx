@@ -8,16 +8,26 @@ import {
   Network,
   Radar,
   ScanSearch,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAdminAuth } from "../context/AdminAuthContext";
 import { useMarketData } from "../context/MarketDataContext";
 import { getUnreadAlertIds, markAlertsRead } from "../lib/alertReadState";
 import { formatQuoteTime } from "../lib/dataSourceLabels";
 import { cn, getMarketMoveTextClass } from "../lib/formatters";
 
-const menus = [
+type SidebarMenu = {
+  label: string;
+  path: string;
+  icon: LucideIcon;
+  alert?: boolean;
+  adminOnly?: boolean;
+};
+
+const menus: SidebarMenu[] = [
   { label: "대시보드", path: "/", icon: Home },
   { label: "산업 시나리오", path: "/scenario", icon: Radar },
   { label: "국내 증시 브리핑", path: "/briefing", icon: Globe2 },
@@ -26,16 +36,18 @@ const menus = [
   { label: "종목 스크리너", path: "/screener", icon: ScanSearch },
   { label: "보유종목·이슈", path: "/portfolio", icon: BriefcaseBusiness },
   { label: "알림센터", path: "/alerts", icon: Bell, alert: true },
-  { label: "설정", path: "/settings", icon: SettingsIcon }
+  { label: "설정", path: "/settings", icon: SettingsIcon, adminOnly: true }
 ];
 
 export function Sidebar() {
   const location = useLocation();
-  const { alerts, indices } = useMarketData();
+  const { alerts, indices, loading, warnings } = useMarketData();
+  const { isAdmin } = useAdminAuth();
   const [alertVersion, setAlertVersion] = useState(0);
   const kospi = indices.find((index) => index.name === "KOSPI") ?? indices[0];
   const kosdaq = indices.find((index) => index.name === "KOSDAQ");
   const unreadAlertCount = useMemo(() => getUnreadAlertIds(alerts).length, [alerts, alertVersion]);
+  const visibleMenus = useMemo(() => menus.filter((menu) => !menu.adminOnly || isAdmin), [isAdmin]);
 
   useEffect(() => {
     const syncReadAt = () => setAlertVersion((value) => value + 1);
@@ -57,7 +69,11 @@ export function Sidebar() {
     <div>
       <p className="text-sm font-bold text-slate-300">{label}</p>
       <p className="mt-1 text-2xl font-black">
-        {index?.value ? index.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 }) : "불러오는 중"}
+        {index?.value
+          ? index.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
+          : loading
+            ? "불러오는 중"
+            : "데이터 연결 대기"}
       </p>
       <p className={cn("mt-1 text-sm font-bold", getMarketMoveTextClass(index?.change ?? 0, "dark"))}>
         {(index?.change ?? 0) >= 0 ? "+" : ""}
@@ -81,7 +97,7 @@ export function Sidebar() {
       </div>
 
       <nav className="mt-10 flex-1 space-y-2 overflow-y-auto pr-1">
-        {menus.map((menu) => {
+        {visibleMenus.map((menu) => {
           const Icon = menu.icon;
           return (
             <NavLink
@@ -113,6 +129,9 @@ export function Sidebar() {
         <div className="mt-5 border-t border-white/10 pt-4">
           <p className="text-xs font-bold text-slate-400">시장 지수</p>
           <p className="mt-2 text-sm font-bold text-slate-300">업데이트 {formatQuoteTime(kospi?.updatedAt ?? new Date().toISOString())}</p>
+          {!loading && warnings.length ? (
+            <p className="mt-2 text-xs font-bold leading-5 text-amber-200">API 연결 확인 필요 · 보완 데이터 사용 중</p>
+          ) : null}
         </div>
       </div>
     </aside>

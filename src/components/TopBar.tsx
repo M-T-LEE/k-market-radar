@@ -14,6 +14,7 @@ const titles: Record<string, string> = {
   "/portfolio": "6. 보유종목 & 이슈 모니터링",
   "/issues": "6. 보유종목 & 이슈 모니터링",
   "/alerts": "알림센터",
+  "/admin-login": "관리자 로그인",
   "/settings": "설정"
 };
 
