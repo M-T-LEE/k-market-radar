@@ -8,6 +8,7 @@ export default async function handler(req: ServerlessRequest, res: ServerRespons
     return;
   }
 
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("Set-Cookie", createAdminLogoutCookie());
   sendJson(res, 200, { authenticated: false });
 }

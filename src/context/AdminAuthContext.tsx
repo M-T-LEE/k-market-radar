@@ -22,7 +22,8 @@ const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
 async function readAdminStatus() {
   const response = await fetch("/api/admin/me", {
-    credentials: "include"
+    credentials: "include",
+    cache: "no-store"
   });
 
   if (!response.ok) {
@@ -54,6 +55,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       const response = await fetch("/api/admin/login", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
         headers: {
           "Content-Type": "application/json"
         },
@@ -84,7 +86,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     try {
       await fetch("/api/admin/logout", {
         method: "POST",
-        credentials: "include"
+        credentials: "include",
+        cache: "no-store"
       });
     } finally {
       setStatus("anonymous");

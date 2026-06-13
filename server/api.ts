@@ -552,29 +552,31 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   }
   sourceStatus.krxDailyProvider = env.KRX_API_KEY ? "fallback" : "disabled";
   sourceStatus.krx = env.KRX_API_KEY ? "fallback" : "disabled";
+  sourceStatus.naverDelayedIndexProvider = env.KRX_API_KEY ? "disabled" : "fallback";
 
-  try {
-    indices = await getNaverDelayedIndices(["KOSPI", "KOSDAQ"]);
-    sourceStatus.naverDelayedIndexProvider = "live";
-  } catch (error) {
-    sourceStatus.naverDelayedIndexProvider = "error";
-    pushWarning(
-      warnings,
-      error instanceof Error
-        ? `네이버페이증권 지연지수 Provider 실패: ${error.message}`
-        : "네이버페이증권 지연지수 Provider 실패"
-    );
+  if (!env.KRX_API_KEY) {
+    try {
+      indices = await getNaverDelayedIndices(["KOSPI", "KOSDAQ"]);
+      sourceStatus.naverDelayedIndexProvider = "live";
+    } catch (error) {
+      sourceStatus.naverDelayedIndexProvider = "error";
+      pushWarning(
+        warnings,
+        error instanceof Error
+          ? `네이버페이증권 지연지수 Provider 실패: ${error.message}`
+          : "네이버페이증권 지연지수 Provider 실패"
+      );
+    }
   }
 
   if (env.KRX_API_KEY) {
     try {
       const krxData = await buildKrxData(env.KRX_API_KEY);
       krxStockRows = krxData.stockRows;
+      indices = krxData.indices;
       sourceStatus.krxDailyProvider = "live";
       sourceStatus.krx = "live";
-      if (sourceStatus.naverDelayedIndexProvider !== "live") {
-        indices = krxData.indices;
-      }
+      sourceStatus.naverDelayedIndexProvider = "disabled";
     } catch (error) {
       sourceStatus.krxDailyProvider = "error";
       sourceStatus.krx = "error";
@@ -583,6 +585,21 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
         error instanceof Error
           ? `KRX Open API 연결 실패: ${error.message}`
           : "KRX Open API 연결 실패"
+      );
+    }
+  }
+
+  if (sourceStatus.krx !== "live" && sourceStatus.naverDelayedIndexProvider !== "live") {
+    try {
+      indices = await getNaverDelayedIndices(["KOSPI", "KOSDAQ"]);
+      sourceStatus.naverDelayedIndexProvider = "live";
+    } catch (error) {
+      sourceStatus.naverDelayedIndexProvider = "error";
+      pushWarning(
+        warnings,
+        error instanceof Error
+          ? `Naver delayed index provider failed: ${error.message}`
+          : "Naver delayed index provider failed"
       );
     }
   }
@@ -604,7 +621,7 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     universeStocks.push(...domesticUniverse);
     domesticUniverseLoaded = true;
     sourceStatus.naverUniverseProvider = "live";
-    sourceStatus.naverDelayedQuoteProvider = "live";
+    sourceStatus.naverDelayedQuoteProvider = krxStockRows ? "fallback" : "live";
   } catch (error) {
     sourceStatus.naverUniverseProvider = "error";
     sourceStatus.naverDelayedQuoteProvider = "error";
@@ -719,7 +736,7 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
 
   if (krxStockRows) {
     stocks = overlayKrxStocks(stocks, krxStockRows, {
-      preferKrxCurrent: !domesticUniverseLoaded
+      preferKrxCurrent: true
     });
   }
 
@@ -941,6 +958,7 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       const body = await readJsonBody<{ password?: string }>(req);
       const result = createAdminLoginResult(String(body.password ?? ""));
 
+      res.setHeader("Cache-Control", "no-store, max-age=0");
       if ("status" in result) {
         jsonResponse(res, result.status, result.body);
         return;
@@ -962,6 +980,7 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       return;
     }
 
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     jsonResponse(res, 200, {
       authenticated: verifyAdminSession(req.headers.cookie)
     });
@@ -973,6 +992,7 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       return;
     }
 
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     res.setHeader("Set-Cookie", createAdminLogoutCookie());
     jsonResponse(res, 200, { authenticated: false });
   });

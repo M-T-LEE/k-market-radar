@@ -15,7 +15,7 @@ export type MarketDataRoute =
   | "US_DATA";
 
 export const marketDataRoutes: Record<MarketDataRoute, string[]> = {
-  DOMESTIC_QUOTE: ["naverDelayedQuoteProvider", "krxDailyProvider", "referenceQuoteProvider"],
+  DOMESTIC_QUOTE: ["krxDailyProvider", "naverDelayedQuoteProvider", "referenceQuoteProvider"],
   DOMESTIC_DAILY: ["krxDailyProvider"],
   DOMESTIC_DISCLOSURE: ["dartDisclosureProvider"],
   US_DATA: ["fmpProvider", "secEdgarProvider"]
@@ -27,10 +27,10 @@ export function isDomesticStock(stock: Stock) {
 
 export async function getDomesticQuote(symbol: string, stock?: Stock) {
   try {
-    return await getNaverDelayedQuote(symbol);
+    return await getKrxDailyQuote(symbol, stock);
   } catch {
     try {
-      return await getKrxDailyQuote(symbol, stock);
+      return await getNaverDelayedQuote(symbol);
     } catch {
       return getReferenceQuote(symbol, stock);
     }
@@ -39,23 +39,23 @@ export async function getDomesticQuote(symbol: string, stock?: Stock) {
 
 export async function getDomesticQuotes(stocks: Stock[]) {
   const domesticStocks = stocks.filter(isDomesticStock);
-  const naverQuotes = new Map<string, Quote>();
+  const krxQuotes = new Map<string, Quote>();
   const settled = await Promise.allSettled(
     domesticStocks.map(async (stock) => ({
       stock,
-      quote: await getNaverDelayedQuote(stock.ticker)
+      quote: await getKrxDailyQuote(stock.ticker, stock)
     }))
   );
 
   settled.forEach((result) => {
     if (result.status === "fulfilled") {
-      naverQuotes.set(result.value.stock.ticker, result.value.quote);
+      krxQuotes.set(result.value.stock.ticker, result.value.quote);
     }
   });
 
   const fallbackResults = await Promise.allSettled(
     domesticStocks
-      .filter((stock) => !naverQuotes.has(stock.ticker))
+      .filter((stock) => !krxQuotes.has(stock.ticker))
       .map(async (stock) => ({
         stock,
         quote: await getDomesticQuote(stock.ticker, stock)
@@ -64,7 +64,7 @@ export async function getDomesticQuotes(stocks: Stock[]) {
 
   const quotes = new Map<string, Quote>();
   domesticStocks.forEach((stock) => {
-    const quote = naverQuotes.get(stock.ticker);
+    const quote = krxQuotes.get(stock.ticker);
     if (quote) quotes.set(stock.id, quote);
   });
 

@@ -12,6 +12,7 @@ export default async function handler(req: ServerlessRequest, res: ServerRespons
     const body = await readJsonRequestBody<{ password?: string }>(req);
     const result = createAdminLoginResult(String(body.password ?? ""));
 
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     if ("status" in result) {
       sendJson(res, result.status, result.body);
       return;

@@ -109,10 +109,10 @@ export async function getNaverDelayedQuotes(symbols: string[]) {
 
 export async function getQuoteWithFallback(symbol: string) {
   try {
-    return await getNaverDelayedQuote(symbol);
+    return await getKrxDailyQuote(symbol);
   } catch {
     try {
-      return await getKrxDailyQuote(symbol);
+      return await getNaverDelayedQuote(symbol);
     } catch {
       return getReferenceQuote(symbol);
     }
