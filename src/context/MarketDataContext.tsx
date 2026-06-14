@@ -14,7 +14,8 @@ import type { MarketDataSnapshot } from "../types/marketData";
 
 const SNAPSHOT_STORAGE_KEY = "k-market-radar:market-data-snapshot";
 const SNAPSHOT_STORAGE_TTL_MS = 15 * 60 * 1000;
-const MARKET_DATA_FETCH_TIMEOUT_MS = 8 * 1000;
+const MARKET_DATA_SLOW_WARNING_MS = 5 * 1000;
+const MARKET_DATA_HARD_TIMEOUT_MS = 30 * 1000;
 
 const fallbackSnapshot: MarketDataSnapshot = {
   generatedAt: new Date().toISOString(),
@@ -135,7 +136,13 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
     }
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), MARKET_DATA_FETCH_TIMEOUT_MS);
+    const slowWarningId = window.setTimeout(() => {
+      setSnapshot((current) => appendWarning(current, "API 응답 지연 중입니다. 수신되는 즉시 화면을 갱신합니다."));
+      if (shouldShowLoading) {
+        setLoading(false);
+      }
+    }, MARKET_DATA_SLOW_WARNING_MS);
+    const hardTimeoutId = window.setTimeout(() => controller.abort(), MARKET_DATA_HARD_TIMEOUT_MS);
 
     try {
       const response = await fetch("/api/market-data", { signal: controller.signal });
@@ -153,7 +160,8 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
           : "API 연결 확인 필요: 보완 데이터를 유지합니다.";
       setSnapshot((current) => appendWarning(current, message));
     } finally {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(slowWarningId);
+      window.clearTimeout(hardTimeoutId);
       if (shouldShowLoading) {
         setLoading(false);
       }

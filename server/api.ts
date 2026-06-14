@@ -22,6 +22,9 @@ import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_CACHE_TTL_MS = 60 * 60 * 1000;
 const WARNING_LIMIT = 8;
+const OPTIONAL_API_TIMEOUT_MS = 1000;
+const FMP_UNIVERSE_TIMEOUT_MS = 1000;
+const SEC_METADATA_TIMEOUT_MS = 1000;
 
 let cachedSnapshot: { expiresAt: number; data: MarketDataSnapshot } | null = null;
 let inFlightSnapshot: Promise<MarketDataSnapshot> | null = null;
@@ -553,6 +556,19 @@ function pushWarning(warnings: string[], message: string) {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+}
+
 function getSecRequestsPerSecond(env: Env) {
   const parsed = Number(env.SEC_REQUESTS_PER_SECOND);
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 10) : 10;
@@ -645,7 +661,7 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   }
 
   try {
-    const usIndices = await getStooqUsIndices();
+    const usIndices = await withTimeout(getStooqUsIndices(), OPTIONAL_API_TIMEOUT_MS, "Stooq index");
     indices = mergeIndices(indices, usIndices);
     sourceStatus.stooqIndexProvider = "live";
   } catch (error) {
@@ -677,7 +693,11 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
 
   if (env.FMP_API_KEY) {
     try {
-      const usUniverse = await getFmpUsUniverseResult(env.FMP_API_KEY);
+      const usUniverse = await withTimeout(
+        getFmpUsUniverseResult(env.FMP_API_KEY),
+        FMP_UNIVERSE_TIMEOUT_MS,
+        "FMP US universe"
+      );
       universeStocks.push(...usUniverse.stocks);
       usUniverseLoaded = true;
       sourceStatus.fmpUniverseProvider = usUniverse.failures.length ? "partial" : "live";
@@ -712,7 +732,11 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     const missingSymbols = largeCapSymbols.filter((symbol) => !loadedSymbols.has(symbol));
     if (missingSymbols.length) {
       try {
-        const stooqUniverse = await getStooqUsUniverseResult(missingSymbols);
+        const stooqUniverse = await withTimeout(
+          getStooqUsUniverseResult(missingSymbols),
+          FMP_UNIVERSE_TIMEOUT_MS,
+          "Stooq US supplement universe"
+        );
         universeStocks.push(...stooqUniverse.stocks);
         setStooqStatus(sourceStatus, stooqUniverse.failures.length);
         if (stooqUniverse.warning) {
@@ -725,7 +749,7 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     }
   }
 
-  if (sourceStatus.fmpUniverseProvider === "error" || sourceStatus.fmpUniverseProvider === "disabled") {
+  if (!usUniverseLoaded && (sourceStatus.fmpUniverseProvider === "error" || sourceStatus.fmpUniverseProvider === "disabled")) {
     const previousUniverse = [...universeStocks];
     const withoutReferenceUs = universeStocks.filter(
       (stock) => !(stock.market.startsWith("US") && stock.universeSource === "REFERENCE")
@@ -733,7 +757,11 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     universeStocks.splice(0, universeStocks.length, ...withoutReferenceUs);
 
     try {
-      const stooqUniverse = await getStooqUsUniverseResult();
+      const stooqUniverse = await withTimeout(
+        getStooqUsUniverseResult(),
+        FMP_UNIVERSE_TIMEOUT_MS,
+        "Stooq US universe"
+      );
       universeStocks.push(...stooqUniverse.stocks);
       usUniverseLoaded = true;
       setStooqStatus(sourceStatus, stooqUniverse.failures.length);
@@ -751,13 +779,17 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     }
   }
 
-  if (env.SEC_USER_AGENT) {
+  if (env.SEC_USER_AGENT && (sourceStatus.fmpUniverseProvider === "live" || sourceStatus.fmpUniverseProvider === "partial")) {
     try {
-      const secTickerMap = await getSecCompanyTickerMap({
-        userAgent: env.SEC_USER_AGENT,
-        acceptEncoding: env.SEC_ACCEPT_ENCODING,
-        requestsPerSecond: getSecRequestsPerSecond(env)
-      });
+      const secTickerMap = await withTimeout(
+        getSecCompanyTickerMap({
+          userAgent: env.SEC_USER_AGENT,
+          acceptEncoding: env.SEC_ACCEPT_ENCODING,
+          requestsPerSecond: getSecRequestsPerSecond(env)
+        }),
+        SEC_METADATA_TIMEOUT_MS,
+        "SEC metadata"
+      );
       const enrichedUniverse = enrichUsStocksWithSecMetadata(universeStocks, secTickerMap);
       universeStocks.splice(0, universeStocks.length, ...enrichedUniverse);
       sourceStatus.sec = "live";
@@ -816,7 +848,7 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
 
   if (!usUniverseLoaded && env.FMP_API_KEY) {
     try {
-      stocks = await overlayFmpQuotes(stocks, env.FMP_API_KEY);
+      stocks = await withTimeout(overlayFmpQuotes(stocks, env.FMP_API_KEY), OPTIONAL_API_TIMEOUT_MS, "FMP quotes");
       sourceStatus.fmp = "live";
     } catch {
       if (sourceStatus.fmp !== "error") {
@@ -825,40 +857,73 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     }
   }
 
+  const enrichmentTasks: Array<Promise<
+    | { kind: "naverSearch"; ok: true; items: Issue[] }
+    | { kind: "naverSearch"; ok: false; error: unknown }
+    | { kind: "newsApi"; ok: true; items: Issue[] }
+    | { kind: "newsApi"; ok: false; error: unknown }
+    | { kind: "openDart"; ok: true; items: Alert[] }
+    | { kind: "openDart"; ok: false; error: unknown }
+  >> = [];
+
   if (env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET) {
-    try {
-      const naverIssues = await fetchNaverIssues(stocks, env);
-      issues = [...naverIssues, ...issues].slice(0, 50);
-      sourceStatus.naverSearch = "live";
-    } catch (error) {
-      sourceStatus.naverSearch = "error";
-      pushWarning(warnings, error instanceof Error ? error.message : "Naver Search API 연결 실패");
-    }
+    enrichmentTasks.push(
+      withTimeout(fetchNaverIssues(stocks, env), OPTIONAL_API_TIMEOUT_MS, "Naver Search API")
+        .then((items) => ({ kind: "naverSearch" as const, ok: true as const, items }))
+        .catch((error) => ({ kind: "naverSearch" as const, ok: false as const, error }))
+    );
   }
 
   if (env.NEWS_API_KEY) {
-    try {
-      const globalIssues = await fetchNewsApiIssues(stocks, env);
-      issues = [...globalIssues, ...issues].slice(0, 60);
-      sourceStatus.newsApi = "live";
-    } catch (error) {
-      sourceStatus.newsApi = "error";
-      pushWarning(warnings, error instanceof Error ? error.message : "News API 연결 실패");
-    }
+    enrichmentTasks.push(
+      withTimeout(fetchNewsApiIssues(stocks, env), OPTIONAL_API_TIMEOUT_MS, "News API")
+        .then((items) => ({ kind: "newsApi" as const, ok: true as const, items }))
+        .catch((error) => ({ kind: "newsApi" as const, ok: false as const, error }))
+    );
   }
 
   if (env.OPEN_DART_API_KEY) {
-    try {
-      const dartAlerts = await dartDisclosureProvider.getDisclosureAlerts(env, stocks);
-      alerts = [...dartAlerts, ...alerts].slice(0, 16);
+    enrichmentTasks.push(
+      withTimeout(dartDisclosureProvider.getDisclosureAlerts(env, stocks), OPTIONAL_API_TIMEOUT_MS, "OpenDART API")
+        .then((items) => ({ kind: "openDart" as const, ok: true as const, items }))
+        .catch((error) => ({ kind: "openDart" as const, ok: false as const, error }))
+    );
+  }
+
+  const enrichmentResults = await Promise.all(enrichmentTasks);
+  enrichmentResults.forEach((result) => {
+    if (result.kind === "naverSearch") {
+      if (result.ok) {
+        issues = [...result.items, ...issues].slice(0, 50);
+        sourceStatus.naverSearch = "live";
+      } else {
+        sourceStatus.naverSearch = "error";
+        pushWarning(warnings, result.error instanceof Error ? result.error.message : "Naver Search API 연결 실패");
+      }
+      return;
+    }
+
+    if (result.kind === "newsApi") {
+      if (result.ok) {
+        issues = [...result.items, ...issues].slice(0, 60);
+        sourceStatus.newsApi = "live";
+      } else {
+        sourceStatus.newsApi = "error";
+        pushWarning(warnings, result.error instanceof Error ? result.error.message : "News API 연결 실패");
+      }
+      return;
+    }
+
+    if (result.ok) {
+      alerts = [...result.items, ...alerts].slice(0, 16);
       sourceStatus.dartDisclosureProvider = "live";
       sourceStatus.openDart = "live";
-    } catch (error) {
+    } else {
       sourceStatus.dartDisclosureProvider = "error";
       sourceStatus.openDart = "error";
-      pushWarning(warnings, error instanceof Error ? error.message : "OpenDART API 연결 실패");
+      pushWarning(warnings, result.error instanceof Error ? result.error.message : "OpenDART API 연결 실패");
     }
-  }
+  });
 
   const data: MarketDataSnapshot = {
     generatedAt: new Date().toISOString(),
