@@ -4,6 +4,7 @@ import { alerts as fallbackAlerts, issues as fallbackIssues } from "../src/data/
 import { stocks as fallbackStocks } from "../src/data/stocks.js";
 import { filterActionableAlerts } from "../src/lib/alertFilters.js";
 import { getDomesticQuotes, getNaverDelayedQuote, getQuoteWithFallback, isDomesticStock } from "../src/lib/marketDataRouter.js";
+import { createStockFromUniverseQuote, type UniverseAssetType } from "../src/lib/stockUniverseFactory.js";
 import { getFmpUsUniverseResult, getReferenceUsUniverse, largeCapSymbols } from "../src/providers/fmpUniverseProvider.js";
 import { getNaverDelayedIndices } from "../src/providers/naverDelayedIndexProvider.js";
 import { getNaverHistoricalTechnicalSignalsBatch } from "../src/providers/naverHistoricalPriceProvider.js";
@@ -19,9 +20,11 @@ import { dartDisclosureProvider } from "./providers/dartDisclosureProvider.js";
 import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const STALE_CACHE_TTL_MS = 60 * 60 * 1000;
 const WARNING_LIMIT = 8;
 
 let cachedSnapshot: { expiresAt: number; data: MarketDataSnapshot } | null = null;
+let inFlightSnapshot: Promise<MarketDataSnapshot> | null = null;
 
 const usSymbols = new Map<string, string>([
   ["nvidia", "NVDA"],
@@ -50,6 +53,38 @@ function toKoreanMarketCap(value: number) {
 function krxDateToIso(value: string | undefined) {
   if (!value || !/^\d{8}$/.test(value)) return new Date().toISOString();
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T15:30:00+09:00`;
+}
+
+function inferKrxAssetType(row: KrxRow): UniverseAssetType {
+  const name = row.ISU_NM ?? "";
+  if (/ETF|ETN|KODEX|TIGER|ACE|RISE|SOL|PLUS|HANARO|KBSTAR|KOSEF|ARIRANG/i.test(name)) return "ETF";
+  if (/우$|우B$|우C$/.test(name)) return "PREFERRED";
+  return "COMMON";
+}
+
+function createKrxUniverseStocks(rows: KrxRow[], market: "KOSPI" | "KOSDAQ") {
+  return rows
+    .map((row) => ({
+      row,
+      marketCapKrw: numeric(row.MKTCAP)
+    }))
+    .filter(({ row, marketCapKrw }) => row.ISU_CD && row.ISU_NM && marketCapKrw >= 100_000_000_000)
+    .map(({ row, marketCapKrw }) =>
+      createStockFromUniverseQuote({
+        name: row.ISU_NM,
+        ticker: row.ISU_CD,
+        market,
+        price: numeric(row.TDD_CLSPRC),
+        change: numeric(row.CMPPREVDD_PRC),
+        changeRate: numeric(row.FLUC_RT),
+        volume: numeric(row.ACC_TRDVOL),
+        marketCap: toKoreanMarketCap(marketCapKrw),
+        source: "KRX_DAILY",
+        sourceLabel: "KRX daily",
+        updatedAt: krxDateToIso(row.BAS_DD),
+        assetType: inferKrxAssetType(row)
+      })
+    );
 }
 
 function quoteProviderFromSource(source: Quote["source"]): NonNullable<Stock["quoteProvider"]> {
@@ -288,7 +323,12 @@ async function buildKrxData(key: string) {
     stockRows.set(row.ISU_CD, row);
   });
 
-  return { indices, stockRows };
+  const universeStocks = [
+    ...createKrxUniverseStocks(kospiStocks.rows, "KOSPI"),
+    ...createKrxUniverseStocks(kosdaqStocks.rows, "KOSDAQ")
+  ];
+
+  return { indices, stockRows, universeStocks };
 }
 
 async function overlayFmpQuotes(stocks: Stock[], apiKey: string) {
@@ -529,11 +569,7 @@ function setStooqStatus(sourceStatus: MarketDataSourceStatus, failuresLength: nu
   sourceStatus.stooqQuoteProvider = failuresLength ? "partial" : "live";
 }
 
-export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
-  if (cachedSnapshot && cachedSnapshot.expiresAt > Date.now()) {
-    return cachedSnapshot.data;
-  }
-
+async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   const env = loadServerEnv();
   const warnings: string[] = [];
   let stocks = fallbackStocks;
@@ -574,9 +610,13 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
       const krxData = await buildKrxData(env.KRX_API_KEY);
       krxStockRows = krxData.stockRows;
       indices = krxData.indices;
+      universeStocks.push(...krxData.universeStocks);
+      domesticUniverseLoaded = true;
       sourceStatus.krxDailyProvider = "live";
       sourceStatus.krx = "live";
       sourceStatus.naverDelayedIndexProvider = "disabled";
+      sourceStatus.naverUniverseProvider = "disabled";
+      sourceStatus.naverDelayedQuoteProvider = "disabled";
     } catch (error) {
       sourceStatus.krxDailyProvider = "error";
       sourceStatus.krx = "error";
@@ -613,24 +653,26 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     pushWarning(warnings, error instanceof Error ? `Stooq 미국 지수 수집 실패: ${error.message}` : "Stooq 미국 지수 수집 실패");
   }
 
-  try {
-    const domesticUniverse = await getNaverDomesticUniverse({
-      markets: ["KOSPI", "KOSDAQ"],
-      minMarketCapKrw: 100_000_000_000
-    });
-    universeStocks.push(...domesticUniverse);
-    domesticUniverseLoaded = true;
-    sourceStatus.naverUniverseProvider = "live";
-    sourceStatus.naverDelayedQuoteProvider = krxStockRows ? "fallback" : "live";
-  } catch (error) {
-    sourceStatus.naverUniverseProvider = "error";
-    sourceStatus.naverDelayedQuoteProvider = "error";
-    pushWarning(
-      warnings,
-      error instanceof Error
+  if (!domesticUniverseLoaded) {
+    try {
+      const domesticUniverse = await getNaverDomesticUniverse({
+        markets: ["KOSPI", "KOSDAQ"],
+        minMarketCapKrw: 100_000_000_000
+      });
+      universeStocks.push(...domesticUniverse);
+      domesticUniverseLoaded = true;
+      sourceStatus.naverUniverseProvider = "live";
+      sourceStatus.naverDelayedQuoteProvider = krxStockRows ? "fallback" : "live";
+    } catch (error) {
+      sourceStatus.naverUniverseProvider = "error";
+      sourceStatus.naverDelayedQuoteProvider = "error";
+      pushWarning(
+        warnings,
+        error instanceof Error
         ? `네이버페이증권 국내 universe 수집 실패: ${error.message}`
         : "네이버페이증권 국내 universe 수집 실패"
     );
+    }
   }
 
   if (env.FMP_API_KEY) {
@@ -828,8 +870,44 @@ export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     warnings
   };
 
-  cachedSnapshot = { expiresAt: Date.now() + CACHE_TTL_MS, data };
   return data;
+}
+
+function withSnapshotWarning(data: MarketDataSnapshot, message: string): MarketDataSnapshot {
+  return {
+    ...data,
+    warnings: Array.from(new Set([message, ...data.warnings])).slice(0, WARNING_LIMIT)
+  };
+}
+
+function startSnapshotBuild() {
+  if (!inFlightSnapshot) {
+    inFlightSnapshot = buildFreshMarketDataSnapshot()
+      .then((data) => {
+        cachedSnapshot = { expiresAt: Date.now() + CACHE_TTL_MS, data };
+        return data;
+      })
+      .finally(() => {
+        inFlightSnapshot = null;
+      });
+  }
+
+  return inFlightSnapshot;
+}
+
+export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
+  const now = Date.now();
+
+  if (cachedSnapshot && cachedSnapshot.expiresAt > now) {
+    return cachedSnapshot.data;
+  }
+
+  if (cachedSnapshot && cachedSnapshot.expiresAt + STALE_CACHE_TTL_MS > now) {
+    void startSnapshotBuild().catch(() => undefined);
+    return withSnapshotWarning(cachedSnapshot.data, "최신 데이터 갱신 중입니다. 직전 스냅샷을 먼저 표시합니다.");
+  }
+
+  return startSnapshotBuild();
 }
 
 export async function getTechnicalSignalsPayload(input: {
@@ -933,8 +1011,10 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
   viteServer.middlewares.use("/api/market-data", async (_req: IncomingMessage, res: ServerResponse) => {
     try {
       const data = await buildMarketDataSnapshot();
+      res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=900");
       jsonResponse(res, 200, data);
     } catch (error) {
+      res.setHeader("Cache-Control", "no-store");
       jsonResponse(res, 500, {
         error: error instanceof Error ? error.message : "Unknown market data error"
       });

@@ -4,6 +4,9 @@ import { getRuntimeEnv, parseNumber, toKoreanMarketCapUnit } from "./providerUti
 
 type KrxRow = Record<string, string>;
 
+const KRX_ROWS_CACHE_TTL_MS = 15 * 60 * 1000;
+const krxRowsCache = new Map<string, { expiresAt: number; data: { basDd: string; rows: KrxRow[] } }>();
+
 function pushBusinessDateWindow(dates: string[], start: Date, targetCount: number) {
   const cursor = new Date(start);
 
@@ -32,6 +35,12 @@ function recentBusinessDates() {
 }
 
 async function fetchKrxRows(endpoint: string, apiKey: string) {
+  const cacheKey = `${endpoint}:${apiKey.slice(0, 8)}`;
+  const cached = krxRowsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
   let lastError = "";
 
   for (const basDd of recentBusinessDates()) {
@@ -45,7 +54,9 @@ async function fetchKrxRows(endpoint: string, apiKey: string) {
     }
 
     if (response.ok && Array.isArray(data?.OutBlock_1) && data.OutBlock_1.length) {
-      return { basDd, rows: data.OutBlock_1 as KrxRow[] };
+      const result = { basDd, rows: data.OutBlock_1 as KrxRow[] };
+      krxRowsCache.set(cacheKey, { expiresAt: Date.now() + KRX_ROWS_CACHE_TTL_MS, data: result });
+      return result;
     }
 
     lastError = data?.respMsg ?? `${response.status} ${response.statusText}`;

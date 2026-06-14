@@ -10,8 +10,10 @@ export default async function handler(req: ServerlessRequest, res: ServerRespons
 
   try {
     const data = await buildMarketDataSnapshot();
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=900");
     sendJson(res, 200, data);
   } catch (error) {
+    res.setHeader("Cache-Control", "no-store");
     sendJson(res, 500, {
       error: apiErrorMessage(error, "Unknown market data error")
     });

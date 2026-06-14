@@ -89,7 +89,7 @@ export interface Stock {
   currentPrice: number;
   volume?: number;
   assetType?: "COMMON" | "PREFERRED" | "ETF" | "ADR" | "UNKNOWN";
-  universeSource?: "NAVER_DELAYED" | "FMP" | "STOOQ" | "REFERENCE";
+  universeSource?: "NAVER_DELAYED" | "KRX_DAILY" | "FMP" | "STOOQ" | "REFERENCE";
   quoteProvider?:
     | "naverDelayedQuoteProvider"
     | "naverUniverseProvider"

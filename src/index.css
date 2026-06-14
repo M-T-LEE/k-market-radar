@@ -140,6 +140,38 @@ html.dark tbody tr:hover {
   background-color: #172944 !important;
 }
 
+@media (max-width: 768px) {
+  html,
+  body,
+  #root {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: #07111f;
+  }
+
+  .mobile-shell,
+  .mobile-shell * {
+    min-width: 0;
+  }
+
+  .mobile-shell input,
+  .mobile-shell select,
+  .mobile-shell textarea,
+  .mobile-shell button {
+    font-size: 16px;
+  }
+
+  .mobile-shell .mobile-admin-settings {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
 html.dark tbody tr.bg-blue-50\/60,
 html.dark tbody tr.bg-blue-50\/70,
 html.dark tbody tr.bg-blue-50\/80 {

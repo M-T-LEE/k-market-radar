@@ -1,10 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import { TopBar } from "../components/TopBar";
+import { MobileLayout } from "../components/mobile/MobileLayout";
 import { AdminAuthProvider, useAdminAuth } from "../context/AdminAuthContext";
 import { MarketDataProvider } from "../context/MarketDataContext";
 import { FavoritesProvider } from "../context/FavoritesContext";
 import { ThemeProvider } from "../context/ThemeContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 import AdminLogin from "../pages/AdminLogin";
 import Alerts from "../pages/Alerts";
 import Dashboard from "../pages/Dashboard";
@@ -35,35 +37,47 @@ function ProtectedSettingsRoute() {
   return <Settings />;
 }
 
+function DesktopLayout() {
+  return (
+    <div className="min-h-screen bg-radar-bg dark:bg-navy-950">
+      <Sidebar />
+      <div className="min-h-screen pl-[280px]">
+        <TopBar />
+        <main className="px-8 py-6">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/scenario" element={<ScenarioMap />} />
+            <Route path="/briefing" element={<MarketBriefing />} />
+            <Route path="/value-chain" element={<ValueChain />} />
+            <Route path="/governance" element={<GroupGovernance />} />
+            <Route path="/screener" element={<Screener />} />
+            <Route path="/valuation" element={<Valuation />} />
+            <Route path="/portfolio" element={<PortfolioMonitor />} />
+            <Route path="/issues" element={<PortfolioMonitor />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/settings" element={<ProtectedSettingsRoute />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function ResponsiveAppLayout() {
+  const isMobile = useIsMobile();
+
+  return isMobile ? <MobileLayout /> : <DesktopLayout />;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
       <MarketDataProvider>
         <AdminAuthProvider>
           <FavoritesProvider>
-            <div className="min-h-screen bg-radar-bg dark:bg-navy-950">
-              <Sidebar />
-              <div className="min-h-screen pl-[280px]">
-                <TopBar />
-                <main className="px-8 py-6">
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/scenario" element={<ScenarioMap />} />
-                    <Route path="/briefing" element={<MarketBriefing />} />
-                    <Route path="/value-chain" element={<ValueChain />} />
-                    <Route path="/governance" element={<GroupGovernance />} />
-                    <Route path="/screener" element={<Screener />} />
-                    <Route path="/valuation" element={<Valuation />} />
-                    <Route path="/portfolio" element={<PortfolioMonitor />} />
-                    <Route path="/issues" element={<PortfolioMonitor />} />
-                    <Route path="/alerts" element={<Alerts />} />
-                    <Route path="/admin-login" element={<AdminLogin />} />
-                    <Route path="/settings" element={<ProtectedSettingsRoute />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </main>
-              </div>
-            </div>
+            <ResponsiveAppLayout />
           </FavoritesProvider>
         </AdminAuthProvider>
       </MarketDataProvider>

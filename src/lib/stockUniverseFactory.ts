@@ -14,7 +14,7 @@ export interface UniverseQuoteInput {
   change?: number;
   volume?: number;
   marketCap: number;
-  source: "NAVER_DELAYED" | "FMP" | "STOOQ" | "REFERENCE";
+  source: "NAVER_DELAYED" | "KRX_DAILY" | "FMP" | "STOOQ" | "REFERENCE";
   sourceLabel: string;
   updatedAt?: string;
   assetType?: UniverseAssetType;
@@ -576,6 +576,8 @@ export function createStockFromUniverseQuote(input: UniverseQuoteInput): Stock {
     quoteProvider:
       input.source === "NAVER_DELAYED"
         ? "naverUniverseProvider"
+        : input.source === "KRX_DAILY"
+          ? "krxDailyProvider"
         : input.source === "FMP"
           ? "fmpUniverseProvider"
           : input.source === "STOOQ"
