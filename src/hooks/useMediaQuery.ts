@@ -12,9 +12,17 @@ export function useMediaQuery(query: string) {
     const updateMatches = () => setMatches(media.matches);
 
     updateMatches();
-    media.addEventListener("change", updateMatches);
+    media.addEventListener?.("change", updateMatches);
+    media.addListener?.(updateMatches);
+    window.addEventListener("resize", updateMatches);
+    window.addEventListener("orientationchange", updateMatches);
 
-    return () => media.removeEventListener("change", updateMatches);
+    return () => {
+      media.removeEventListener?.("change", updateMatches);
+      media.removeListener?.(updateMatches);
+      window.removeEventListener("resize", updateMatches);
+      window.removeEventListener("orientationchange", updateMatches);
+    };
   }, [query]);
 
   return matches;
