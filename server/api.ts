@@ -25,6 +25,7 @@ const WARNING_LIMIT = 8;
 const OPTIONAL_API_TIMEOUT_MS = 1000;
 const FMP_UNIVERSE_TIMEOUT_MS = 1000;
 const SEC_METADATA_TIMEOUT_MS = 1000;
+const FAST_KRX_INDEX_TIMEOUT_MS = 1200;
 
 let cachedSnapshot: { expiresAt: number; data: MarketDataSnapshot } | null = null;
 let inFlightSnapshot: Promise<MarketDataSnapshot> | null = null;
@@ -282,6 +283,41 @@ async function fetchKrxRows(endpoint: string, key: string) {
   }
 
   throw new Error(lastError || "KRX 응답 데이터가 비어 있습니다.");
+}
+
+function buildKrxIndexSnapshots(kospiIndex: KrxRowsResponse, kosdaqIndex: KrxRowsResponse): MarketIndexSnapshot[] {
+  const indexRows = [
+    { name: "KOSPI" as const, response: kospiIndex },
+    { name: "KOSDAQ" as const, response: kosdaqIndex }
+  ];
+
+  return indexRows.map(({ name, response }) => {
+    const row =
+      response.rows.find((item) => numeric(item.CLSPRC_IDX ?? item.TDD_CLSPRC ?? item.IDX_VAL) > 0 && item.IDX_CLSS === name) ??
+      response.rows[0];
+
+    return {
+      name,
+      value: numeric(row.CLSPRC_IDX ?? row.TDD_CLSPRC ?? row.IDX_VAL),
+      change: numeric(row.CMPPREVDD_IDX ?? row.CMPPREVDD_PRC ?? row.PRVD_DD_CMPR),
+      changeRate: numeric(row.FLUC_RT),
+      baseDate: response.basDd,
+      source: "KRX" as const,
+      sourceLabel: "KRX 일별 지수",
+      isRealtime: false,
+      isDelayed: true,
+      updatedAt: krxDateToIso(response.basDd)
+    };
+  });
+}
+
+async function buildKrxIndexData(key: string) {
+  const [kospiIndex, kosdaqIndex] = await Promise.all([
+    fetchKrxRows("idx/kospi_dd_trd", key),
+    fetchKrxRows("idx/kosdaq_dd_trd", key)
+  ]);
+
+  return buildKrxIndexSnapshots(kospiIndex, kosdaqIndex);
 }
 
 async function buildKrxData(key: string) {
@@ -960,7 +996,90 @@ function startSnapshotBuild() {
   return inFlightSnapshot;
 }
 
-export async function buildMarketDataSnapshot(): Promise<MarketDataSnapshot> {
+async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
+  const now = Date.now();
+
+  if (cachedSnapshot && cachedSnapshot.expiresAt > now) {
+    return cachedSnapshot.data;
+  }
+
+  if (cachedSnapshot && cachedSnapshot.expiresAt + STALE_CACHE_TTL_MS > now) {
+    void startSnapshotBuild().catch(() => undefined);
+    return withSnapshotWarning(cachedSnapshot.data, "최신 데이터 갱신 중입니다. 직전 스냅샷을 먼저 표시합니다.");
+  }
+
+  const env = loadServerEnv();
+  const warnings = ["빠른 응답 모드: KRX 전체 종목 데이터는 백그라운드에서 갱신 중입니다."];
+  const sourceStatus = makeSourceStatus({
+    stooqQuoteProvider: "disabled",
+    stooqIndexProvider: "disabled",
+    brokerRealtimeProvider: "disabled",
+    referenceQuoteProvider: "fallback",
+    naverUniverseProvider: "fallback",
+    naverDelayedQuoteProvider: "fallback",
+    fmpUniverseProvider: env.FMP_API_KEY ? "fallback" : "disabled",
+    fmp: env.FMP_API_KEY ? "fallback" : "disabled",
+    sec: env.SEC_USER_AGENT ? "fallback" : "disabled",
+    dartDisclosureProvider: env.OPEN_DART_API_KEY ? "fallback" : "disabled",
+    openDart: env.OPEN_DART_API_KEY ? "fallback" : "disabled",
+    naverSearch: env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET ? "fallback" : "disabled",
+    newsApi: env.NEWS_API_KEY ? "fallback" : "disabled",
+    krxDailyProvider: env.KRX_API_KEY ? "fallback" : "disabled",
+    krx: env.KRX_API_KEY ? "fallback" : "disabled",
+    naverDelayedIndexProvider: env.KRX_API_KEY ? "disabled" : "fallback"
+  });
+  let indices = buildFallbackIndices();
+
+  if (env.KRX_API_KEY) {
+    process.env.KRX_API_KEY = env.KRX_API_KEY;
+    try {
+      indices = await withTimeout(
+        buildKrxIndexData(env.KRX_API_KEY),
+        FAST_KRX_INDEX_TIMEOUT_MS,
+        "KRX index quick snapshot"
+      );
+      sourceStatus.krxDailyProvider = "partial";
+      sourceStatus.krx = "partial";
+      sourceStatus.naverDelayedIndexProvider = "disabled";
+    } catch (error) {
+      sourceStatus.krxDailyProvider = "error";
+      sourceStatus.krx = "error";
+      sourceStatus.naverDelayedIndexProvider = "fallback";
+      pushWarning(warnings, error instanceof Error ? `KRX 지수 빠른 수집 실패: ${error.message}` : "KRX 지수 빠른 수집 실패");
+    }
+  }
+
+  if (!env.KRX_API_KEY || sourceStatus.krx === "error") {
+    try {
+      indices = await withTimeout(getNaverDelayedIndices(["KOSPI", "KOSDAQ"]), FAST_KRX_INDEX_TIMEOUT_MS, "Naver index quick snapshot");
+      sourceStatus.naverDelayedIndexProvider = "live";
+    } catch (error) {
+      sourceStatus.naverDelayedIndexProvider = "error";
+      pushWarning(
+        warnings,
+        error instanceof Error ? `네이버 지수 빠른 수집 실패: ${error.message}` : "네이버 지수 빠른 수집 실패"
+      );
+    }
+  }
+
+  void startSnapshotBuild().catch(() => undefined);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    indices,
+    stocks: fallbackStocks,
+    issues: fallbackIssues,
+    alerts: filterActionableAlerts(fallbackAlerts, fallbackStocks),
+    sourceStatus,
+    warnings
+  };
+}
+
+export async function buildMarketDataSnapshot(options: { fast?: boolean } = {}): Promise<MarketDataSnapshot> {
+  if (options.fast) {
+    return buildFastMarketDataSnapshot();
+  }
+
   const now = Date.now();
 
   if (cachedSnapshot && cachedSnapshot.expiresAt > now) {
@@ -1073,10 +1192,15 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
     }
   });
 
-  viteServer.middlewares.use("/api/market-data", async (_req: IncomingMessage, res: ServerResponse) => {
+  viteServer.middlewares.use("/api/market-data", async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      const data = await buildMarketDataSnapshot();
-      res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=900");
+      const requestUrl = new URL(req.url ?? "/api/market-data", "http://localhost");
+      const fast = requestUrl.searchParams.get("mode") === "fast" || requestUrl.searchParams.get("fast") === "1";
+      const data = await buildMarketDataSnapshot({ fast });
+      res.setHeader(
+        "Cache-Control",
+        fast ? "public, max-age=15, s-maxage=60, stale-while-revalidate=300" : "public, max-age=60, s-maxage=300, stale-while-revalidate=900"
+      );
       jsonResponse(res, 200, data);
     } catch (error) {
       res.setHeader("Cache-Control", "no-store");

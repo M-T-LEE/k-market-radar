@@ -5,11 +5,13 @@ export function isKoreanStock(stock: Pick<Stock, "market">) {
 }
 
 export function getStockExternalUrl(stock: Pick<Stock, "market" | "ticker">) {
+  const ticker = stock.ticker.trim();
+
   if (isKoreanStock(stock)) {
-    return `https://finance.naver.com/item/main.naver?code=${stock.ticker}`;
+    return `https://finance.naver.com/item/main.naver?code=${encodeURIComponent(ticker)}`;
   }
 
-  return `https://finance.yahoo.com/quote/${encodeURIComponent(stock.ticker)}`;
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
 }
 
 export function getStockExternalLabel(stock: Pick<Stock, "market">) {

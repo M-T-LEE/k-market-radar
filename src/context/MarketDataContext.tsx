@@ -14,8 +14,8 @@ import type { MarketDataSnapshot } from "../types/marketData";
 
 const SNAPSHOT_STORAGE_KEY = "k-market-radar:market-data-snapshot";
 const SNAPSHOT_STORAGE_TTL_MS = 15 * 60 * 1000;
-const MARKET_DATA_SLOW_WARNING_MS = 5 * 1000;
-const MARKET_DATA_HARD_TIMEOUT_MS = 30 * 1000;
+const FAST_MARKET_DATA_TIMEOUT_MS = 3500;
+const FULL_MARKET_DATA_TIMEOUT_MS = 30 * 1000;
 
 const fallbackSnapshot: MarketDataSnapshot = {
   generatedAt: new Date().toISOString(),
@@ -71,7 +71,7 @@ const fallbackSnapshot: MarketDataSnapshot = {
 
 interface MarketDataContextValue extends MarketDataSnapshot {
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (options?: { showLoading?: boolean }) => Promise<void>;
 }
 
 function sanitizeMarketDataSnapshot(snapshot: MarketDataSnapshot): MarketDataSnapshot {
@@ -98,8 +98,18 @@ function readCachedSnapshot() {
   }
 }
 
+function shouldCacheSnapshot(snapshot: MarketDataSnapshot) {
+  return (
+    snapshot.sourceStatus.krx === "live" ||
+    snapshot.sourceStatus.naverUniverseProvider === "live" ||
+    snapshot.sourceStatus.fmpUniverseProvider === "live" ||
+    snapshot.sourceStatus.fmpUniverseProvider === "partial" ||
+    snapshot.stocks.length > fallbackStocks.length
+  );
+}
+
 function writeCachedSnapshot(snapshot: MarketDataSnapshot) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !shouldCacheSnapshot(snapshot)) return;
 
   try {
     window.localStorage.setItem(
@@ -121,6 +131,26 @@ function appendWarning(snapshot: MarketDataSnapshot, message: string): MarketDat
   };
 }
 
+async function fetchSnapshot(path: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(path, {
+      signal: controller.signal,
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(`market-data ${response.status}`);
+    }
+
+    return sanitizeMarketDataSnapshot((await response.json()) as MarketDataSnapshot);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 const MarketDataContext = createContext<MarketDataContextValue | null>(null);
 
 export function MarketDataProvider({ children }: { children: ReactNode }) {
@@ -135,36 +165,40 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
       setLoading(true);
     }
 
-    const controller = new AbortController();
-    const slowWarningId = window.setTimeout(() => {
-      setSnapshot((current) => appendWarning(current, "API 응답 지연 중입니다. 수신되는 즉시 화면을 갱신합니다."));
-      if (shouldShowLoading) {
-        setLoading(false);
-      }
-    }, MARKET_DATA_SLOW_WARNING_MS);
-    const hardTimeoutId = window.setTimeout(() => controller.abort(), MARKET_DATA_HARD_TIMEOUT_MS);
+    let fastSnapshotApplied = false;
 
     try {
-      const response = await fetch("/api/market-data", { signal: controller.signal });
-      if (!response.ok) {
-        throw new Error(`market-data ${response.status}`);
-      }
-
-      const data = sanitizeMarketDataSnapshot((await response.json()) as MarketDataSnapshot);
-      writeCachedSnapshot(data);
-      setSnapshot(data);
+      const fastData = await fetchSnapshot("/api/market-data?mode=fast", FAST_MARKET_DATA_TIMEOUT_MS);
+      fastSnapshotApplied = true;
+      setSnapshot(fastData);
+      writeCachedSnapshot(fastData);
     } catch (error) {
       const message =
         error instanceof Error && error.name === "AbortError"
-          ? "API 응답이 지연되어 직전 데이터를 먼저 표시합니다."
-          : "API 연결 확인 필요: 보완 데이터를 유지합니다.";
+          ? "빠른 API 응답이 지연되어 직전 데이터를 먼저 표시합니다."
+          : "빠른 API 연결 확인 필요: 보완 데이터를 먼저 표시합니다.";
       setSnapshot((current) => appendWarning(current, message));
     } finally {
-      window.clearTimeout(slowWarningId);
-      window.clearTimeout(hardTimeoutId);
       if (shouldShowLoading) {
         setLoading(false);
       }
+    }
+
+    try {
+      const fullData = await fetchSnapshot("/api/market-data", FULL_MARKET_DATA_TIMEOUT_MS);
+      writeCachedSnapshot(fullData);
+      setSnapshot(fullData);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.name === "AbortError"
+          ? "전체 API 응답이 지연되어 빠른 스냅샷을 유지합니다."
+          : "전체 API 연결 확인 필요: 현재 표시 중인 데이터를 유지합니다.";
+      setSnapshot((current) =>
+        appendWarning(
+          current,
+          fastSnapshotApplied ? message : "API 연결 확인 필요: 보완 데이터를 사용 중입니다."
+        )
+      );
     }
   }, []);
 
