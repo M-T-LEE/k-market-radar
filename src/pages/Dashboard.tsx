@@ -1,5 +1,5 @@
 import { Cpu, Star, TriangleAlert, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/Badge";
 import { DataTable } from "../components/DataTable";
@@ -16,7 +16,6 @@ import { useFavorites } from "../context/FavoritesContext";
 import { useMarketData } from "../context/MarketDataContext";
 import { scenarios } from "../data/scenarios";
 import { calculateFinalScore, calculatePreReflectionRisk, getFinalDecision } from "../lib/scoring";
-import { getTechnicalSignals } from "../lib/technicalSignals";
 import { cn, formatPercent, getMarketMoveTextClass } from "../lib/formatters";
 import { getScreenerUrl, getValueChainUrl } from "../lib/externalLinks";
 
@@ -35,7 +34,6 @@ export default function Dashboard() {
           const score = calculateFinalScore(stock);
           return {
             ...stock,
-            technicalSignals: getTechnicalSignals(stock),
             computedScore: score,
             computedDecision: getFinalDecision(score, risk, stock.earningsLinkScore, stock.assetType)
           };
@@ -44,7 +42,8 @@ export default function Dashboard() {
     [stocks]
   );
 
-  const heatmapStocks = stocks.filter((stock) => stock.market === market);
+  const heatmapStocks = useMemo(() => stocks.filter((stock) => stock.market === market), [market, stocks]);
+  const deferredHeatmapStocks = useDeferredValue(heatmapStocks);
   const scenarioMomentum = useMemo(
     () =>
       scenarios
@@ -58,7 +57,7 @@ export default function Dashboard() {
           const avgChange = related.length
             ? related.reduce((sum, stock) => sum + (stock.dailyChangeRate ?? stock.priceChange3M), 0) / related.length
             : 0;
-          const topStock = related.sort((a, b) => (b.dailyChangeRate ?? b.priceChange3M) - (a.dailyChangeRate ?? a.priceChange3M))[0];
+          const topStock = [...related].sort((a, b) => (b.dailyChangeRate ?? b.priceChange3M) - (a.dailyChangeRate ?? a.priceChange3M))[0];
           return { scenario, avgChange, count: related.length, topStock };
         })
         .sort((a, b) => Math.abs(b.avgChange) - Math.abs(a.avgChange)),
@@ -69,14 +68,18 @@ export default function Dashboard() {
   const currentScenarioUrl = `/scenario?scenario=${encodeURIComponent(currentScenario.id)}`;
   const currentValueChainUrl = getValueChainUrl({ scenario: currentScenario.id });
   const newCapturedUrl = getScreenerUrl({ capture: "new" });
-  const favoriteStocks = scoredStocks.filter((stock) => isFavorite(stock.id));
-  const warningCount = stocks.filter((stock) => calculatePreReflectionRisk(stock) >= 68).length;
-  const newCapturedCount = scoredStocks.filter(
-    (stock) =>
-      (stock.market === "KOSPI" || stock.market === "KOSDAQ") &&
-      stock.computedScore >= 70 &&
-      (stock.technicalSignals.length > 0 || (stock.dailyChangeRate ?? stock.priceChange3M) >= 3)
-  ).length;
+  const favoriteStocks = useMemo(() => scoredStocks.filter((stock) => isFavorite(stock.id)), [isFavorite, scoredStocks]);
+  const warningCount = useMemo(() => stocks.filter((stock) => calculatePreReflectionRisk(stock) >= 68).length, [stocks]);
+  const newCapturedCount = useMemo(
+    () =>
+      scoredStocks.filter(
+        (stock) =>
+          (stock.market === "KOSPI" || stock.market === "KOSDAQ") &&
+          stock.computedScore >= 70 &&
+          ((stock.dailyChangeRate ?? stock.priceChange3M) >= 3 || (stock.volume ?? 0) > 0)
+      ).length,
+    [scoredStocks]
+  );
 
   useEffect(() => {
     if (scenarioMomentum[0]?.scenario.id) {
@@ -154,7 +157,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-5 flex-1">
             <Heatmap
-              stocks={heatmapStocks}
+              stocks={deferredHeatmapStocks}
               mode={heatmapMode}
               marketLabel={market}
               className="h-full"

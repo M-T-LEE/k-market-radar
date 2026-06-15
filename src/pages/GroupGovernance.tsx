@@ -14,7 +14,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/Badge";
 import { GovernanceChangeWatchPanel } from "../components/DecisionSupportPanels";
 import { useMarketData } from "../context/MarketDataContext";
-import { governanceUpdatePolicy, groupGovernanceData } from "../data/groupGovernance";
+import { governanceUpdatePolicy } from "../data/groupGovernance";
+import { enhancedGroupGovernanceData as groupGovernanceData } from "../lib/governanceEnhancements";
 import { getStockExternalUrl } from "../lib/externalLinks";
 import {
   cn,

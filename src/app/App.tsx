@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { MobileLayout } from "../components/mobile/MobileLayout";
 import { Sidebar } from "../components/Sidebar";
 import { TopBar } from "../components/TopBar";
 import { AdminAuthProvider, useAdminAuth } from "../context/AdminAuthContext";
@@ -20,10 +21,6 @@ const Screener = lazy(() => import("../pages/Screener"));
 const Settings = lazy(() => import("../pages/Settings"));
 const Valuation = lazy(() => import("../pages/Valuation"));
 const ValueChain = lazy(() => import("../pages/ValueChain"));
-const MobileLayout = lazy(() =>
-  import("../components/mobile/MobileLayout").then((module) => ({ default: module.MobileLayout }))
-);
-
 function PageFallback() {
   return (
     <section className="rounded-lg border border-radar-line bg-white p-6 text-sm font-bold text-slate-600 shadow-card dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -88,11 +85,7 @@ function ResponsiveAppLayout() {
   const isMobile = useIsMobile();
 
   if (isMobile) {
-    return (
-      <Suspense fallback={<PageFallback />}>
-        <MobileLayout />
-      </Suspense>
-    );
+    return <MobileLayout />;
   }
 
   return <DesktopLayout />;

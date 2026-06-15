@@ -37,16 +37,27 @@ export function preloadRouteForPath(path: string) {
 export function preloadLikelyRoutesOnIdle() {
   if (typeof window === "undefined") return;
 
-  const run = () => {
-    ["/scenario", "/screener", "/value-chain", "/governance"].forEach(preloadRouteForPath);
+  const primaryRoutes = ["/scenario", "/screener", "/value-chain", "/governance", "/briefing", "/portfolio", "/alerts"];
+  const secondaryRoutes = ["/valuation", "/admin-login", "/settings"];
+
+  const runPrimary = () => {
+    primaryRoutes.forEach(preloadRouteForPath);
   };
 
-  const delay = () => globalThis.setTimeout(run, 700);
+  const runSecondary = () => {
+    secondaryRoutes.forEach(preloadRouteForPath);
+  };
+
+  const requestFrame = "requestAnimationFrame" in window
+    ? window.requestAnimationFrame.bind(window)
+    : (callback: FrameRequestCallback) => globalThis.setTimeout(() => callback(performance.now()), 16);
+
+  requestFrame(runPrimary);
 
   if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(delay, { timeout: 900 });
+    window.requestIdleCallback(runSecondary, { timeout: 1500 });
     return;
   }
 
-  globalThis.setTimeout(run, 1400);
+  globalThis.setTimeout(runSecondary, 1800);
 }

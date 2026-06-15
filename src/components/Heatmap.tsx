@@ -1,4 +1,5 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { Stock } from "../types/stock";
 import { cn, formatMarketCap, formatPercent, getMarketMoveHeatColor } from "../lib/formatters";
@@ -135,31 +136,35 @@ export function Heatmap({
   className?: string;
   gridClassName?: string;
 }) {
-  const sectorTiles = Object.values(
-    stocks.reduce<Record<string, { sector: string; count: number; totalMarketCap: number; leaders: Stock[] }>>((acc, stock) => {
-      const key = stock.theme;
-      if (!acc[key]) {
-        acc[key] = { sector: key, count: 0, totalMarketCap: 0, leaders: [] };
-      }
-      const group = acc[key]!;
-      group.count += 1;
-      group.totalMarketCap += marketCapValue(stock);
-      group.leaders.push(stock);
-      return acc;
-    }, {})
-  )
-    .map((item): SectorTile => {
-      const weightedChange = weightedAverageChange(item.leaders);
-      return {
-        ...item,
-        weightedChange,
-        impact: item.totalMarketCap * Math.abs(weightedChange),
-        leaders: [...item.leaders].sort((a, b) => heatmapImpact(b) - heatmapImpact(a)).slice(0, 3)
-      };
-    })
-    .sort((a, b) => b.impact - a.impact);
+  const sectorTiles = useMemo(
+    () =>
+      Object.values(
+        stocks.reduce<Record<string, { sector: string; count: number; totalMarketCap: number; leaders: Stock[] }>>((acc, stock) => {
+          const key = stock.theme;
+          if (!acc[key]) {
+            acc[key] = { sector: key, count: 0, totalMarketCap: 0, leaders: [] };
+          }
+          const group = acc[key]!;
+          group.count += 1;
+          group.totalMarketCap += marketCapValue(stock);
+          group.leaders.push(stock);
+          return acc;
+        }, {})
+      )
+        .map((item): SectorTile => {
+          const weightedChange = weightedAverageChange(item.leaders);
+          return {
+            ...item,
+            weightedChange,
+            impact: item.totalMarketCap * Math.abs(weightedChange),
+            leaders: [...item.leaders].sort((a, b) => heatmapImpact(b) - heatmapImpact(a)).slice(0, 3)
+          };
+        })
+        .sort((a, b) => b.impact - a.impact),
+    [stocks]
+  );
 
-  const stockTiles = [...stocks].sort((a, b) => heatmapImpact(b) - heatmapImpact(a)).slice(0, 16);
+  const stockTiles = useMemo(() => [...stocks].sort((a, b) => heatmapImpact(b) - heatmapImpact(a)).slice(0, 16), [stocks]);
   const tiles = mode === "섹터별" ? sectorTiles.slice(0, 12) : stockTiles;
 
   return (
