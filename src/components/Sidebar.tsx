@@ -18,6 +18,7 @@ import { useMarketData } from "../context/MarketDataContext";
 import { getUnreadAlertIds, markAlertsRead } from "../lib/alertReadState";
 import { formatQuoteTime } from "../lib/dataSourceLabels";
 import { cn, getMarketMoveTextClass } from "../lib/formatters";
+import { preloadRouteForPath } from "../lib/routePreloaders";
 
 type SidebarMenu = {
   label: string;
@@ -104,6 +105,8 @@ export function Sidebar() {
               key={menu.path}
               to={menu.path}
               end={menu.path === "/"}
+              onPointerEnter={() => preloadRouteForPath(menu.path)}
+              onFocus={() => preloadRouteForPath(menu.path)}
               className={({ isActive }) =>
                 cn(
                   "flex h-14 items-center gap-4 rounded-lg px-4 text-sm font-black text-slate-200 transition hover:bg-blue-600/30 hover:text-white",

@@ -27,7 +27,9 @@ import { portfolioHoldings } from "../../data/portfolio";
 import { scenarios } from "../../data/scenarios";
 import { valueChains } from "../../data/valueChains";
 import { cn, formatMarketCap, formatNumber, formatPercent, getMarketMoveTextClass } from "../../lib/formatters";
+import { preloadRouteForPath } from "../../lib/routePreloaders";
 import { getScenarioStocks } from "../../lib/scenarioMatching";
+import { StockExternalLink } from "../StockExternalLink";
 import AdminLogin from "../../pages/AdminLogin";
 import Settings from "../../pages/Settings";
 import type { Scenario, ValueChain } from "../../types/scenario";
@@ -39,6 +41,18 @@ const MOBILE_NAV_ITEMS = [
   { label: "밸류", path: "/value-chain", icon: GitBranch },
   { label: "종목", path: "/screener", icon: Search },
   { label: "알림", path: "/alerts", icon: Bell }
+];
+
+const MOBILE_NAV_ITEMS_FULL = [
+  { label: "대시", path: "/", icon: Home, end: true },
+  { label: "산업", path: "/scenario", icon: Activity },
+  { label: "브리핑", path: "/briefing", icon: LineChart },
+  { label: "밸류", path: "/value-chain", icon: GitBranch },
+  { label: "기업", path: "/governance", icon: Network },
+  { label: "종목", path: "/screener", icon: Search },
+  { label: "보유", path: "/portfolio", icon: BriefcaseBusiness },
+  { label: "알림", path: "/alerts", icon: Bell },
+  { label: "설정", path: "/settings", icon: LockKeyhole, adminOnly: true }
 ];
 
 const scenarioOptionAll = "all";
@@ -128,52 +142,71 @@ function getValueChainStocks(chain: ValueChain, stocks: Stock[]) {
   return merged.length ? merged : scenarioStocks.filter(isDomesticStock);
 }
 
-function useMobileMarketModel() {
-  const marketData = useMarketData();
+type MobileMarketModelOptions = {
+  scenarios?: boolean;
+  valueChains?: boolean;
+};
 
-  return useMemo(() => {
-    const domesticStocks = marketData.stocks.filter(isDomesticStock);
+function useMobileMarketModel(options: MobileMarketModelOptions = {}) {
+  const marketData = useMarketData();
+  const { stocks, issues, alerts, indices, generatedAt, warnings, sourceStatus, refresh } = marketData;
+  const includeScenarios = options.scenarios ?? false;
+  const includeValueChains = options.valueChains ?? false;
+
+  const derivedModel = useMemo(() => {
+    const domesticStocks = stocks.filter(isDomesticStock);
     const allStocksByMove = sortByMove(domesticStocks);
     const allStocksByScore = sortByScore(domesticStocks);
     const risingStocks = allStocksByMove.filter((stock) => getStockMove(stock) > 0);
     const fallingStocks = [...allStocksByMove].reverse().filter((stock) => getStockMove(stock) < 0);
 
-    const scenarioSummaries = scenarios
-      .map((scenario) => {
-        const relatedStocks = getScenarioStocks(scenario, domesticStocks);
-        const topStocks = sortByMove(relatedStocks).slice(0, 4);
-        const avgMove = getAverageMove(relatedStocks);
+    const scenarioSummaries = includeScenarios
+      ? scenarios
+          .map((scenario) => {
+            const relatedStocks = getScenarioStocks(scenario, domesticStocks);
+            const topStocks = sortByMove(relatedStocks).slice(0, 4);
+            const avgMove = getAverageMove(relatedStocks);
 
-        return {
-          scenario,
-          relatedStocks,
-          topStocks,
-          avgMove,
-          strongCount: relatedStocks.filter((stock) => getStockMove(stock) > 0).length
-        };
-      })
-      .filter((item) => item.relatedStocks.length > 0)
-      .sort((a, b) => b.avgMove - a.avgMove);
+            return {
+              scenario,
+              relatedStocks,
+              topStocks,
+              avgMove,
+              strongCount: relatedStocks.filter((stock) => getStockMove(stock) > 0).length
+            };
+          })
+          .filter((item) => item.relatedStocks.length > 0)
+          .sort((a, b) => b.avgMove - a.avgMove)
+      : [];
 
-    const valueChainSummaries = valueChains
-      .map((chain) => {
-        const relatedStocks = getValueChainStocks(chain, domesticStocks);
-        const topStocks = sortByMove(relatedStocks).slice(0, 4);
-        const avgMove = getAverageMove(relatedStocks);
+    const valueChainSummaries = includeValueChains
+      ? valueChains
+          .map((chain) => {
+            const relatedStocks = getValueChainStocks(chain, domesticStocks);
+            const topStocks = sortByMove(relatedStocks).slice(0, 4);
+            const avgMove = getAverageMove(relatedStocks);
 
-        return {
-          chain,
-          relatedStocks,
-          topStocks,
-          avgMove,
-          strongCount: relatedStocks.filter((stock) => getStockMove(stock) > 0).length
-        };
-      })
-      .filter((item) => item.relatedStocks.length > 0)
-      .sort((a, b) => b.avgMove - a.avgMove);
+            return {
+              chain,
+              relatedStocks,
+              topStocks,
+              avgMove,
+              strongCount: relatedStocks.filter((stock) => getStockMove(stock) > 0).length
+            };
+          })
+          .filter((item) => item.relatedStocks.length > 0)
+          .sort((a, b) => b.avgMove - a.avgMove)
+      : [];
 
     return {
-      ...marketData,
+      stocks,
+      issues,
+      alerts,
+      indices,
+      generatedAt,
+      warnings,
+      sourceStatus,
+      refresh,
       domesticStocks,
       topStocksByMove: allStocksByMove.slice(0, 12),
       topStocksByScore: allStocksByScore.slice(0, 12),
@@ -182,7 +215,15 @@ function useMobileMarketModel() {
       scenarioSummaries,
       valueChainSummaries
     };
-  }, [marketData]);
+  }, [alerts, generatedAt, includeScenarios, includeValueChains, indices, issues, refresh, sourceStatus, stocks, warnings]);
+
+  return useMemo(
+    () => ({
+      ...derivedModel,
+      loading: marketData.loading
+    }),
+    [derivedModel, marketData.loading]
+  );
 }
 
 function MobileHeader() {
@@ -252,18 +293,28 @@ function getMobileTitle(pathname: string) {
 }
 
 function MobileBottomNav() {
+  const { isAdmin } = useAdminAuth();
+  const navItems = useMemo(
+    () => MOBILE_NAV_ITEMS_FULL.filter((item) => !("adminOnly" in item) || !item.adminOnly || isAdmin),
+    [isAdmin]
+  );
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-800 bg-navy-950/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 text-slate-400 shadow-2xl backdrop-blur">
-      {MOBILE_NAV_ITEMS.map((item) => {
+    <nav className="fixed inset-x-0 bottom-0 z-40 overflow-x-auto border-t border-slate-800 bg-navy-950/95 text-slate-400 shadow-2xl backdrop-blur">
+      <div className="flex min-w-max gap-1 px-2 pb-[env(safe-area-inset-bottom)] pt-1">
+      {navItems.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.end}
+            onPointerEnter={() => preloadRouteForPath(item.path)}
+            onTouchStart={() => preloadRouteForPath(item.path)}
+            onFocus={() => preloadRouteForPath(item.path)}
             className={({ isActive }) =>
               cn(
-                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-black",
+                "flex min-h-16 min-w-[66px] flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-black",
                 isActive ? "bg-blue-500/15 text-blue-200" : "text-slate-400"
               )
             }
@@ -273,6 +324,7 @@ function MobileBottomNav() {
           </NavLink>
         );
       })}
+      </div>
     </nav>
   );
 }
@@ -361,6 +413,11 @@ function StockCard({ stock, compact = false }: { stock: Stock; compact?: boolean
             {stock.ticker} · {stock.market}
           </p>
         </div>
+        <StockExternalLink
+          stock={stock}
+          compact
+          className="!h-11 !shrink-0 !border-slate-700 !bg-slate-900 !px-3 !py-0 !text-blue-200"
+        />
         <button
           type="button"
           onClick={() => toggleFavorite(stock.id)}
@@ -472,7 +529,7 @@ function ValueChainCard({
 }
 
 function MobileDashboard() {
-  const model = useMobileMarketModel();
+  const model = useMobileMarketModel({ scenarios: true, valueChains: true });
   const strongestScenario = model.scenarioSummaries[0];
   const strongestChain = model.valueChainSummaries[0];
 
@@ -526,7 +583,7 @@ function QuickLink({ to, icon: Icon, label }: { to: string; icon: typeof Home; l
 }
 
 function MobileScenario() {
-  const model = useMobileMarketModel();
+  const model = useMobileMarketModel({ scenarios: true });
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("scenario") ?? model.scenarioSummaries[0]?.scenario.id ?? scenarios[0]?.id;
   const selectedSummary = model.scenarioSummaries.find((item) => item.scenario.id === selectedId) ?? model.scenarioSummaries[0];
@@ -608,7 +665,7 @@ function MobileScenario() {
 }
 
 function MobileValueChain() {
-  const model = useMobileMarketModel();
+  const model = useMobileMarketModel({ valueChains: true });
   const [params, setParams] = useSearchParams();
   const scenarioFilter = params.get("scenario") ?? scenarioOptionAll;
   const selectedChainId = params.get("chain");
@@ -726,7 +783,7 @@ function MobileScreener() {
 }
 
 function MobileBriefing() {
-  const model = useMobileMarketModel();
+  const model = useMobileMarketModel({ scenarios: true });
   const stockById = useMemo(() => new Map(model.stocks.map((stock) => [stock.id, stock])), [model.stocks]);
 
   return (
@@ -773,6 +830,18 @@ function MobileGovernance() {
   const [selectedGroupId, setSelectedGroupId] = useState(groupGovernanceData[0]?.id ?? "");
   const selectedGroup = groupGovernanceData.find((group) => group.id === selectedGroupId) ?? groupGovernanceData[0];
   const listedNodes = selectedGroup?.nodes.filter((node) => node.listed) ?? [];
+  const nodeById = useMemo(() => new Map(selectedGroup?.nodes.map((node) => [node.id, node]) ?? []), [selectedGroup]);
+  const holdingRows = useMemo(
+    () =>
+      selectedGroup?.edges
+        .flatMap((edge) => {
+          const holder = nodeById.get(edge.from);
+          const asset = nodeById.get(edge.to);
+          return holder && asset ? [{ edge, holder, asset }] : [];
+        })
+        .sort((a, b) => b.edge.ownershipPercent - a.edge.ownershipPercent) ?? [],
+    [nodeById, selectedGroup]
+  );
 
   return (
     <MobilePage>
@@ -802,7 +871,28 @@ function MobileGovernance() {
 
           <MobileSection title="핵심 계열사" subtitle="맵 대신 계열사와 역할을 세로 카드로 정리합니다.">
             <div className="space-y-3">
-              {listedNodes.slice(0, 10).map((node) => (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+                <h3 className="text-base font-black text-slate-50">그룹 내 주식보유현황 전체</h3>
+                <p className="mt-1 text-sm font-bold leading-6 text-slate-400">
+                  지배 관계뿐 아니라 그룹 안에서 확인되는 보유 지분 관계를 모두 표시합니다.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {holdingRows.map(({ edge, holder, asset }) => (
+                    <div key={edge.id} className="rounded-xl bg-slate-900 px-3 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 break-keep text-sm font-black leading-5 text-slate-100">
+                          {holder.name} → {asset.name}
+                        </p>
+                        <span className="shrink-0 rounded-full bg-blue-500/15 px-2.5 py-1 text-xs font-black text-blue-200">
+                          {formatNumber(edge.ownershipPercent, 1)}%
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{String(edge.relation)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {listedNodes.map((node) => (
                 <article key={node.id} className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

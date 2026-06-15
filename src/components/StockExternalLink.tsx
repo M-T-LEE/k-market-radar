@@ -20,6 +20,12 @@ export function StockExternalLink({
     event.stopPropagation();
   };
 
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLAnchorElement>) => {
     event.stopPropagation();
   };
@@ -32,7 +38,7 @@ export function StockExternalLink({
       data-external-stock-link="true"
       onPointerDownCapture={stopParentAction}
       onMouseDownCapture={stopParentAction}
-      onClick={stopParentAction}
+      onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md border border-radar-line bg-white px-2.5 py-1.5 text-xs font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-50",

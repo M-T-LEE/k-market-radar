@@ -15,7 +15,7 @@ export function getStockExternalUrl(stock: Pick<Stock, "market" | "ticker">) {
 }
 
 export function getStockExternalLabel(stock: Pick<Stock, "market">) {
-  return isKoreanStock(stock) ? "네이버증권" : "Yahoo Finance";
+  return isKoreanStock(stock) ? "외부" : "Yahoo";
 }
 
 export function getScreenerUrl(filters: {

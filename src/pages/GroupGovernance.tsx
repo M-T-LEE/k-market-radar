@@ -1251,6 +1251,103 @@ function OwnershipStakeMap({
   );
 }
 
+function GroupHoldingLedger({
+  rows,
+  onSelectNode
+}: {
+  rows: OwnershipRow[];
+  onSelectNode: (nodeId: string) => void;
+}) {
+  const groupedRows = useMemo(() => {
+    const grouped = rows.reduce((map, row) => {
+      const holderRows = map.get(row.holder.id) ?? [];
+      holderRows.push(row);
+      map.set(row.holder.id, holderRows);
+      return map;
+    }, new Map<string, OwnershipRow[]>());
+
+    return Array.from(grouped.values()).sort((a, b) => {
+      const aValue = a.reduce((sum, row) => sum + row.estimatedStakeValue, 0);
+      const bValue = b.reduce((sum, row) => sum + row.estimatedStakeValue, 0);
+      return bValue - aValue;
+    });
+  }, [rows]);
+
+  if (!rows.length) return null;
+
+  return (
+    <section className="rounded-lg border border-radar-line bg-white p-5 shadow-card dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <GitBranch size={18} className="text-blue-600" />
+            <h3 className="text-xl font-black text-radar-ink">그룹 내 주식보유현황 전체</h3>
+          </div>
+          <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+            지배·자회사뿐 아니라 주요 지분, 전략 지분, 순환·복합 관계까지 입력된 그룹 내 보유 관계를 모두 표시합니다.
+          </p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          총 {rows.length}개 관계
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 max-xl:grid-cols-1">
+        {groupedRows.map((holderRows) => {
+          const holder = holderRows[0]?.holder;
+          if (!holder) return null;
+
+          return (
+            <article key={holder.id} className="rounded-xl border border-radar-line bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+              <button
+                type="button"
+                onClick={() => onSelectNode(holder.id)}
+                className="text-left text-base font-black text-radar-ink hover:text-blue-600"
+              >
+                {holder.name}
+              </button>
+              <p className="mt-1 text-xs font-bold text-slate-500">{holder.role}</p>
+
+              <div className="mt-3 space-y-2">
+                {holderRows.map((row) => (
+                  <button
+                    key={row.edge.id}
+                    type="button"
+                    onClick={() => onSelectNode(row.asset.id)}
+                    className="w-full rounded-lg border border-radar-line bg-white p-3 text-left hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500/60"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-keep text-sm font-black leading-5 text-radar-ink">
+                          {row.holder.name} <span className="text-slate-400">→</span> {row.asset.name}
+                        </p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                          {row.asset.ticker ?? row.asset.market ?? "비상장"} · {row.asset.role}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-black text-radar-ink">{formatOwnership(row.edge.ownershipPercent)}</p>
+                        <span className={cn("mt-1 inline-flex rounded-full border bg-white px-2 py-1 text-[11px] font-black dark:bg-slate-900", row.meta.border, row.meta.text)}>
+                          {row.meta.label}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <StakeProgress percent={row.edge.ownershipPercent} meta={row.meta} />
+                      <span className="shrink-0 text-xs font-black text-slate-500">{formatCapValue(row.estimatedStakeValue, row.assetStock?.market)}</span>
+                    </div>
+                    {row.edge.note ? <p className="mt-2 text-xs font-bold leading-5 text-slate-500">{row.edge.note}</p> : null}
+                  </button>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function GroupGovernance() {
   const { stocks } = useMarketData();
   const [selectedGroupId, setSelectedGroupId] = useState(groupGovernanceData[0].id);
@@ -1473,6 +1570,7 @@ export default function GroupGovernance() {
             groupStockViews={groupStockViews}
             onSelectNode={setSelectedNodeId}
           />
+          <GroupHoldingLedger rows={ownershipRows} onSelectNode={setSelectedNodeId} />
         </div>
       </section>
 

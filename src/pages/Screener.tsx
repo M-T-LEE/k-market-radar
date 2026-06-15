@@ -1,5 +1,5 @@
 import { BookmarkCheck, ExternalLink, Filter, Gauge, RotateCcw, Search, Settings2, Sparkles, Star, Target, TrendingUp, X } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "../components/Badge";
 import { DataTable } from "../components/DataTable";
@@ -360,6 +360,7 @@ export default function Screener() {
   });
   const [sort, setSort] = useState<SortOption>("종합점수 높은 순");
   const [query, setQuery] = useState(searchParams.get("query") ?? "");
+  const deferredQuery = useDeferredValue(query);
   const [favoriteOnly, setFavoriteOnly] = useState(initialFavoriteOnly);
   const [newCapturedOnly, setNewCapturedOnly] = useState(initialNewCapturedOnly);
   const [selectedId, setSelectedId] = useState(searchParams.get("stock") ?? "");
@@ -412,12 +413,26 @@ export default function Screener() {
         })
         .filter((stock) => valuation === "전체" || stock.valuationStatus === valuation)
         .filter((stock) => decision === "전체" || stock.computedDecision === decision)
-        .filter((stock) =>
-          query.trim()
-            ? stock.scenarioSearchText.includes(query.trim().toLowerCase())
-            : true
-        ),
-    [assetType, decision, favoriteOnly, isFavorite, maxMarketCap, maxScore, market, minMarketCap, minScore, newCapturedOnly, query, scenarioFilter, scoredStocks, valuation]
+        .filter((stock) => {
+          const normalizedQuery = deferredQuery.trim().toLowerCase();
+          return normalizedQuery ? stock.scenarioSearchText.includes(normalizedQuery) : true;
+        }),
+    [
+      assetType,
+      decision,
+      deferredQuery,
+      favoriteOnly,
+      isFavorite,
+      maxMarketCap,
+      maxScore,
+      market,
+      minMarketCap,
+      minScore,
+      newCapturedOnly,
+      scenarioFilter,
+      scoredStocks,
+      valuation
+    ]
   );
 
   const exactTechnicalKind = technicalFilterToKind(technicalSignal);
@@ -589,33 +604,50 @@ export default function Screener() {
     [baseFiltered, historicalVerification.matches]
   );
 
-  const filtered = sortStocks(
-    enrichedBaseFiltered.filter((stock) => {
-      if (!isExactTechnicalFilter) {
-        return matchesTechnicalSignal(stock, technicalSignal, technicalWindow);
-      }
+  const filtered = useMemo(
+    () =>
+      sortStocks(
+        enrichedBaseFiltered.filter((stock) => {
+          if (!isExactTechnicalFilter) {
+            return matchesTechnicalSignal(stock, technicalSignal, technicalWindow);
+          }
 
-      if (historicalVerification.key !== exactTechnicalRequestKey || historicalVerification.loading) {
-        return false;
-      }
+          if (historicalVerification.key !== exactTechnicalRequestKey || historicalVerification.loading) {
+            return false;
+          }
 
-      if (historicalVerification.error) {
-        return false;
-      }
+          if (historicalVerification.error) {
+            return false;
+          }
 
-      if (stock.market !== "KOSPI" && stock.market !== "KOSDAQ") {
-        return false;
-      }
+          if (stock.market !== "KOSPI" && stock.market !== "KOSDAQ") {
+            return false;
+          }
 
-      const historicalSignals = historicalVerification.matches[stock.ticker] ?? [];
-      return historicalSignals.some(
-        (signal) =>
-          signal.source === "HISTORICAL" &&
-          signal.kind === exactTechnicalKind &&
-          signal.daysAgo <= exactTechnicalWindowDays
-      );
-    }),
-    sort
+          const historicalSignals = historicalVerification.matches[stock.ticker] ?? [];
+          return historicalSignals.some(
+            (signal) =>
+              signal.source === "HISTORICAL" &&
+              signal.kind === exactTechnicalKind &&
+              signal.daysAgo <= exactTechnicalWindowDays
+          );
+        }),
+        sort
+      ),
+    [
+      enrichedBaseFiltered,
+      exactTechnicalKind,
+      exactTechnicalRequestKey,
+      exactTechnicalWindowDays,
+      historicalVerification.error,
+      historicalVerification.key,
+      historicalVerification.loading,
+      historicalVerification.matches,
+      isExactTechnicalFilter,
+      sort,
+      technicalSignal,
+      technicalWindow
+    ]
   );
 
   const selected =
@@ -627,14 +659,21 @@ export default function Screener() {
   const pageSize = 50;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const pagedFiltered = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const exactTechnicalCandidateCount = exactTechnicalKind
-    ? baseFiltered.filter(
-        (stock) =>
-          (stock.market === "KOSPI" || stock.market === "KOSDAQ") &&
-          isTechnicalVerificationCandidate(stock, exactTechnicalKind)
-      ).length
-    : 0;
+  const pagedFiltered = useMemo(
+    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, filtered]
+  );
+  const exactTechnicalCandidateCount = useMemo(
+    () =>
+      exactTechnicalKind
+        ? baseFiltered.filter(
+            (stock) =>
+              (stock.market === "KOSPI" || stock.market === "KOSDAQ") &&
+              isTechnicalVerificationCandidate(stock, exactTechnicalKind)
+          ).length
+        : 0,
+    [baseFiltered, exactTechnicalKind]
+  );
   const exactTechnicalMatchedCount = Object.keys(historicalVerification.matches).length;
   const scoreColumnLabels = getScoreColumnLabels(assetType);
   const activeFilters = [

@@ -20,12 +20,11 @@ import { dartDisclosureProvider } from "./providers/dartDisclosureProvider.js";
 import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
-const STALE_CACHE_TTL_MS = 60 * 60 * 1000;
+const STALE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const WARNING_LIMIT = 8;
 const OPTIONAL_API_TIMEOUT_MS = 1000;
 const FMP_UNIVERSE_TIMEOUT_MS = 1000;
 const SEC_METADATA_TIMEOUT_MS = 1000;
-const FAST_KRX_INDEX_TIMEOUT_MS = 1200;
 
 let cachedSnapshot: { expiresAt: number; data: MarketDataSnapshot } | null = null;
 let inFlightSnapshot: Promise<MarketDataSnapshot> | null = null;
@@ -1005,11 +1004,13 @@ async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
 
   if (cachedSnapshot && cachedSnapshot.expiresAt + STALE_CACHE_TTL_MS > now) {
     void startSnapshotBuild().catch(() => undefined);
-    return withSnapshotWarning(cachedSnapshot.data, "최신 데이터 갱신 중입니다. 직전 스냅샷을 먼저 표시합니다.");
+    return withSnapshotWarning(
+      cachedSnapshot.data,
+      "\uCD5C\uC2E0 \uB370\uC774\uD130 \uAC31\uC2E0 \uC911\uC785\uB2C8\uB2E4. \uC9C1\uC804 \uB370\uC774\uD130\uC14B\uC744 \uBA3C\uC800 \uD45C\uC2DC\uD569\uB2C8\uB2E4."
+    );
   }
 
   const env = loadServerEnv();
-  const warnings = ["빠른 응답 모드: KRX 전체 종목 데이터는 백그라운드에서 갱신 중입니다."];
   const sourceStatus = makeSourceStatus({
     stooqQuoteProvider: "disabled",
     stooqIndexProvider: "disabled",
@@ -1028,50 +1029,19 @@ async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     krx: env.KRX_API_KEY ? "fallback" : "disabled",
     naverDelayedIndexProvider: env.KRX_API_KEY ? "disabled" : "fallback"
   });
-  let indices = buildFallbackIndices();
-
-  if (env.KRX_API_KEY) {
-    process.env.KRX_API_KEY = env.KRX_API_KEY;
-    try {
-      indices = await withTimeout(
-        buildKrxIndexData(env.KRX_API_KEY),
-        FAST_KRX_INDEX_TIMEOUT_MS,
-        "KRX index quick snapshot"
-      );
-      sourceStatus.krxDailyProvider = "partial";
-      sourceStatus.krx = "partial";
-      sourceStatus.naverDelayedIndexProvider = "disabled";
-    } catch (error) {
-      sourceStatus.krxDailyProvider = "error";
-      sourceStatus.krx = "error";
-      sourceStatus.naverDelayedIndexProvider = "fallback";
-      pushWarning(warnings, error instanceof Error ? `KRX 지수 빠른 수집 실패: ${error.message}` : "KRX 지수 빠른 수집 실패");
-    }
-  }
-
-  if (!env.KRX_API_KEY || sourceStatus.krx === "error") {
-    try {
-      indices = await withTimeout(getNaverDelayedIndices(["KOSPI", "KOSDAQ"]), FAST_KRX_INDEX_TIMEOUT_MS, "Naver index quick snapshot");
-      sourceStatus.naverDelayedIndexProvider = "live";
-    } catch (error) {
-      sourceStatus.naverDelayedIndexProvider = "error";
-      pushWarning(
-        warnings,
-        error instanceof Error ? `네이버 지수 빠른 수집 실패: ${error.message}` : "네이버 지수 빠른 수집 실패"
-      );
-    }
-  }
 
   void startSnapshotBuild().catch(() => undefined);
 
   return {
     generatedAt: new Date().toISOString(),
-    indices,
+    indices: buildFallbackIndices(),
     stocks: fallbackStocks,
     issues: fallbackIssues,
     alerts: filterActionableAlerts(fallbackAlerts, fallbackStocks),
     sourceStatus,
-    warnings
+    warnings: [
+      "\uBE60\uB978 \uC751\uB2F5 \uBAA8\uB4DC: \uBCF4\uC644 \uB370\uC774\uD130\uB97C \uC989\uC2DC \uD45C\uC2DC\uD558\uACE0 \uCD5C\uC2E0 KRX \uB370\uC774\uD130\uB294 \uBC31\uADF8\uB77C\uC6B4\uB4DC\uC5D0\uC11C \uAC31\uC2E0\uD569\uB2C8\uB2E4."
+    ]
   };
 }
 

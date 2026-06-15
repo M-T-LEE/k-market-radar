@@ -1,9 +1,11 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
@@ -13,9 +15,10 @@ import { filterActionableAlerts } from "../lib/alertFilters";
 import type { MarketDataSnapshot } from "../types/marketData";
 
 const SNAPSHOT_STORAGE_KEY = "k-market-radar:market-data-snapshot";
-const SNAPSHOT_STORAGE_TTL_MS = 15 * 60 * 1000;
-const FAST_MARKET_DATA_TIMEOUT_MS = 3500;
-const FULL_MARKET_DATA_TIMEOUT_MS = 30 * 1000;
+const SNAPSHOT_STORAGE_TTL_MS = 6 * 60 * 60 * 1000;
+const FAST_MARKET_DATA_TIMEOUT_MS = 650;
+const FULL_MARKET_DATA_TIMEOUT_MS = 8 * 1000;
+const INITIAL_REFRESH_DELAY_MS = 80;
 
 const fallbackSnapshot: MarketDataSnapshot = {
   generatedAt: new Date().toISOString(),
@@ -66,7 +69,7 @@ const fallbackSnapshot: MarketDataSnapshot = {
     newsApi: "fallback",
     sec: "disabled"
   },
-  warnings: ["API 연결 대기 중입니다. 보완 데이터를 먼저 표시합니다."]
+  warnings: ["API 연결 확인 전까지 보완 데이터를 먼저 표시합니다."]
 };
 
 interface MarketDataContextValue extends MarketDataSnapshot {
@@ -101,6 +104,7 @@ function readCachedSnapshot() {
 function shouldCacheSnapshot(snapshot: MarketDataSnapshot) {
   return (
     snapshot.sourceStatus.krx === "live" ||
+    snapshot.sourceStatus.krx === "partial" ||
     snapshot.sourceStatus.naverUniverseProvider === "live" ||
     snapshot.sourceStatus.fmpUniverseProvider === "live" ||
     snapshot.sourceStatus.fmpUniverseProvider === "partial" ||
@@ -131,15 +135,16 @@ function appendWarning(snapshot: MarketDataSnapshot, message: string): MarketDat
   };
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 async function fetchSnapshot(path: string, timeoutMs: number) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(path, {
-      signal: controller.signal,
-      cache: "no-store"
-    });
+    const response = await fetch(path, { signal: controller.signal });
 
     if (!response.ok) {
       throw new Error(`market-data ${response.status}`);
@@ -147,8 +152,21 @@ async function fetchSnapshot(path: string, timeoutMs: number) {
 
     return sanitizeMarketDataSnapshot((await response.json()) as MarketDataSnapshot);
   } finally {
-    window.clearTimeout(timeoutId);
+    globalThis.clearTimeout(timeoutId);
   }
+}
+
+function waitForIdle(timeoutMs = 700) {
+  if (typeof window === "undefined") return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: timeoutMs });
+      return;
+    }
+
+    globalThis.setTimeout(resolve, Math.min(timeoutMs, 700));
+  });
 }
 
 const MarketDataContext = createContext<MarketDataContextValue | null>(null);
@@ -158,8 +176,12 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
     () => readCachedSnapshot() ?? sanitizeMarketDataSnapshot(fallbackSnapshot)
   );
   const [loading, setLoading] = useState(false);
+  const refreshRunRef = useRef(0);
 
   const refresh = useCallback(async (options?: { showLoading?: boolean }) => {
+    const refreshRun = refreshRunRef.current + 1;
+    refreshRunRef.current = refreshRun;
+
     const shouldShowLoading = options?.showLoading ?? true;
     if (shouldShowLoading) {
       setLoading(true);
@@ -169,41 +191,55 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
 
     try {
       const fastData = await fetchSnapshot("/api/market-data?mode=fast", FAST_MARKET_DATA_TIMEOUT_MS);
+      if (refreshRun !== refreshRunRef.current) return;
+
       fastSnapshotApplied = true;
-      setSnapshot(fastData);
+      startTransition(() => setSnapshot(fastData));
       writeCachedSnapshot(fastData);
     } catch (error) {
-      const message =
-        error instanceof Error && error.name === "AbortError"
-          ? "빠른 API 응답이 지연되어 직전 데이터를 먼저 표시합니다."
-          : "빠른 API 연결 확인 필요: 보완 데이터를 먼저 표시합니다.";
-      setSnapshot((current) => appendWarning(current, message));
+      if (shouldShowLoading && refreshRun === refreshRunRef.current) {
+        const message = isAbortError(error)
+          ? "빠른 API 응답이 지연되어 직전 데이터를 먼저 유지합니다."
+          : "빠른 API 연결 확인 필요: 현재 표시 중인 데이터를 유지합니다.";
+        setSnapshot((current) => appendWarning(current, message));
+      }
     } finally {
-      if (shouldShowLoading) {
+      if (shouldShowLoading && refreshRun === refreshRunRef.current) {
         setLoading(false);
       }
     }
 
-    try {
-      const fullData = await fetchSnapshot("/api/market-data", FULL_MARKET_DATA_TIMEOUT_MS);
-      writeCachedSnapshot(fullData);
-      setSnapshot(fullData);
-    } catch (error) {
-      const message =
-        error instanceof Error && error.name === "AbortError"
-          ? "전체 API 응답이 지연되어 빠른 스냅샷을 유지합니다."
+    void waitForIdle().then(async () => {
+      if (refreshRun !== refreshRunRef.current) return;
+
+      try {
+        const fullData = await fetchSnapshot("/api/market-data", FULL_MARKET_DATA_TIMEOUT_MS);
+        if (refreshRun !== refreshRunRef.current) return;
+
+        writeCachedSnapshot(fullData);
+        startTransition(() => setSnapshot(fullData));
+      } catch (error) {
+        if (refreshRun !== refreshRunRef.current || !shouldShowLoading) return;
+
+        const message = isAbortError(error)
+          ? "전체 API 응답이 지연되어 빠른 데이터셋을 유지합니다."
           : "전체 API 연결 확인 필요: 현재 표시 중인 데이터를 유지합니다.";
-      setSnapshot((current) =>
-        appendWarning(
-          current,
-          fastSnapshotApplied ? message : "API 연결 확인 필요: 보완 데이터를 사용 중입니다."
-        )
-      );
-    }
+        setSnapshot((current) =>
+          appendWarning(
+            current,
+            fastSnapshotApplied ? message : "API 연결 확인 필요: 보완 데이터를 사용 중입니다."
+          )
+        );
+      }
+    });
   }, []);
 
   useEffect(() => {
-    void refresh({ showLoading: false });
+    const timerId = globalThis.setTimeout(() => {
+      void refresh({ showLoading: false });
+    }, INITIAL_REFRESH_DELAY_MS);
+
+    return () => globalThis.clearTimeout(timerId);
   }, [refresh]);
 
   const value = useMemo(
