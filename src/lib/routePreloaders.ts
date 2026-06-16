@@ -37,27 +37,28 @@ export function preloadRouteForPath(path: string) {
 export function preloadLikelyRoutesOnIdle() {
   if (typeof window === "undefined") return;
 
-  const primaryRoutes = ["/scenario", "/screener", "/value-chain", "/governance", "/briefing", "/portfolio", "/alerts"];
-  const secondaryRoutes = ["/valuation", "/admin-login", "/settings"];
+  const primaryRoutes = ["/scenario"];
+  const secondaryRoutes = ["/screener", "/value-chain", "/governance", "/briefing", "/portfolio", "/alerts"];
+  const tertiaryRoutes = ["/valuation", "/admin-login", "/settings"];
 
-  const runPrimary = () => {
-    primaryRoutes.forEach(preloadRouteForPath);
+  const preloadWithGap = (routes: string[], startDelayMs: number, gapMs: number) => {
+    routes.forEach((route, index) => {
+      globalThis.setTimeout(() => preloadRouteForPath(route), startDelayMs + index * gapMs);
+    });
   };
 
-  const runSecondary = () => {
-    secondaryRoutes.forEach(preloadRouteForPath);
-  };
-
-  const requestFrame = "requestAnimationFrame" in window
-    ? window.requestAnimationFrame.bind(window)
-    : (callback: FrameRequestCallback) => globalThis.setTimeout(() => callback(performance.now()), 16);
-
-  requestFrame(runPrimary);
+  const runPrimary = () => preloadWithGap(primaryRoutes, 0, 0);
+  const runSecondary = () => preloadWithGap(secondaryRoutes, 900, 650);
+  const runTertiary = () => preloadWithGap(tertiaryRoutes, 5400, 900);
 
   if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(runSecondary, { timeout: 1500 });
+    window.requestIdleCallback(runPrimary, { timeout: 700 });
+    window.requestIdleCallback(runSecondary, { timeout: 2400 });
+    window.requestIdleCallback(runTertiary, { timeout: 7000 });
     return;
   }
 
-  globalThis.setTimeout(runSecondary, 1800);
+  globalThis.setTimeout(runPrimary, 700);
+  globalThis.setTimeout(runSecondary, 2400);
+  globalThis.setTimeout(runTertiary, 7000);
 }

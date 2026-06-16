@@ -954,6 +954,110 @@ function ScenarioSpotlightCard({ item }: { item: ScenarioNodeOverview }) {
   );
 }
 
+function getUniqueStocks(stocks: Stock[]) {
+  const byId = new Map<string, Stock>();
+  stocks.forEach((stock) => {
+    if (!byId.has(stock.id)) byId.set(stock.id, stock);
+  });
+  return Array.from(byId.values());
+}
+
+function ScenarioMainSectorCard({ overview }: { overview: ScenarioOverview }) {
+  const topStocks = getUniqueStocks(overview.strongStocks).slice(0, 5);
+  const topNodes = overview.topNodes.slice(0, 4);
+  const activeNodeCount = overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0).length;
+
+  return (
+    <Link
+      to={`/scenario?scenario=${overview.scenario.id}&node=${overview.entryNode.id}`}
+      className="group flex min-h-[360px] flex-col rounded-lg border border-radar-line bg-slate-50 p-4 transition hover:border-blue-400 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500 dark:hover:bg-blue-950/25"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black text-blue-600 dark:text-blue-300">대표 산업</p>
+          <h3 className="mt-1 break-keep text-xl font-black leading-7 text-radar-ink">{overview.scenario.name}</h3>
+        </div>
+        <span className={cn("shrink-0 rounded-full border px-2.5 py-1 text-xs font-black", getMarketMoveBadgeClass(overview.averageChange))}>
+          {formatPercent(overview.averageChange)}
+        </span>
+      </div>
+
+      <p className="mt-3 min-h-[44px] break-keep text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
+        {overview.scenario.description}
+      </p>
+
+      <div className="mt-3 grid grid-cols-4 gap-2 max-sm:grid-cols-2">
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">관련</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{overview.relatedCount}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">세부축</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{activeNodeCount}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">강세</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{overview.strongStocks.length}</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-2 dark:bg-slate-900">
+          <p className="text-[10px] font-black text-slate-400">상승비중</p>
+          <p className="mt-1 text-sm font-black text-radar-ink">{Math.round(overview.breadth)}%</p>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-md bg-white p-3 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-black text-radar-ink">주요 세부축</p>
+          <span className={cn("text-xs font-black", getMarketMoveTextClass(overview.averageChange))}>
+            평균 {formatPercent(overview.averageChange)}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {topNodes.map((item) => (
+            <span key={item.node.id} className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {getCanonicalNodeLabel(item.node.label)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-md bg-white p-3 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-black text-radar-ink">오늘 강한 종목</p>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+            당일 등락률
+          </span>
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {topStocks.slice(0, 4).map((stock) => (
+            <div key={stock.id} className="flex items-center justify-between gap-3 rounded bg-slate-50 px-2 py-1.5 dark:bg-slate-800">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-black text-radar-ink">{stock.name}</p>
+                <p className="text-[10px] font-bold text-slate-400">
+                  {stock.ticker} · {stock.market}
+                </p>
+              </div>
+              <span className={cn("shrink-0 text-xs font-black", getMarketMoveTextClass(getStockMove(stock)))}>
+                {formatPercent(getStockMove(stock))}
+              </span>
+            </div>
+          ))}
+          {!topStocks.length ? (
+            <div className="rounded bg-slate-50 px-2 py-2 text-xs font-bold text-slate-500 dark:bg-slate-800">
+              강세 종목을 관찰 중입니다.
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-auto flex items-center justify-between border-t border-radar-line pt-3 text-xs font-black text-blue-600 dark:border-slate-700 dark:text-blue-300">
+        <span>산업 흐름 보기</span>
+        <ArrowRight size={15} className="transition group-hover:translate-x-1" />
+      </div>
+    </Link>
+  );
+}
+
 function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
   const [filterScenarioId, setFilterScenarioId] = useState("all");
   const filteredOverviews = useMemo(() => {
@@ -962,29 +1066,16 @@ function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
   }, [filterScenarioId, overviews]);
   const selectedOverview = filteredOverviews[0];
   const filterLabel = filterScenarioId === "all" ? "전체 산업" : selectedOverview?.scenario.name ?? "선택 산업";
-  const spotlightNodes = useMemo(
-    () => {
-      const uniqueNodes = dedupeScenarioNodeOverviews(
-        filteredOverviews.flatMap((overview) => overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0))
-      );
-
-      return uniqueNodes
-        .sort((a, b) => {
-          const strongDiff = b.strongStocks.length - a.strongStocks.length;
-          if (strongDiff) return strongDiff;
-          const changeDiff = b.summary.averageChange - a.summary.averageChange;
-          if (changeDiff) return changeDiff;
-          return b.summary.relatedCount - a.summary.relatedCount;
-        })
-        .slice(0, filterScenarioId === "all" ? 16 : 18);
-    },
-    [filterScenarioId, filteredOverviews]
+  const visibleScenarioCards = useMemo(
+    () => filteredOverviews.filter((overview) => overview.relatedCount > 0),
+    [filteredOverviews]
   );
   const strongStockCount = new Set(filteredOverviews.flatMap((overview) => overview.strongStocks.map((stock) => stock.id))).size;
   const totalRelatedCount = filteredOverviews.reduce((sum, overview) => sum + overview.relatedCount, 0);
-  const visibleSectorCount = dedupeScenarioNodeOverviews(
-    filteredOverviews.flatMap((overview) => overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0))
-  ).length;
+  const visibleSectorCount = filteredOverviews.reduce(
+    (sum, overview) => sum + overview.nodeOverviews.filter((item) => item.summary.relatedCount > 0).length,
+    0
+  );
   const averageScenarioMove = filteredOverviews.length
     ? filteredOverviews.reduce((sum, overview) => sum + overview.averageChange, 0) / filteredOverviews.length
     : 0;
@@ -996,10 +1087,10 @@ function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
           <div className="max-w-3xl">
             <p className="text-sm font-black text-blue-600 dark:text-blue-300">산업 시나리오 메인</p>
             <h2 className="mt-2 text-2xl font-black leading-tight text-radar-ink">
-              세부 섹터 강세와 전환 흐름을 먼저 봅니다
+              대표 산업 강세와 전환 흐름을 먼저 봅니다
             </h2>
             <p className="mt-2 break-keep text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
-              드롭다운으로 산업을 좁혀 보고, 세부 섹터 카드를 선택하면 해당 산업의 상세 흐름으로 이동합니다. 관련종목은 세부 섹터 안에서 상대적으로 강한 종목만 먼저 보여줍니다.
+              드롭다운으로 산업을 좁혀 보고, 대표 산업 카드를 선택하면 해당 산업의 상세 흐름으로 이동합니다. 종목 등락률은 당일 기준 움직임을 우선 표시합니다.
             </p>
           </div>
           <div className="min-w-[340px] max-w-md flex-1 max-sm:min-w-0">
@@ -1054,18 +1145,18 @@ function ScenarioIndexPage({ overviews }: { overviews: ScenarioOverview[] }) {
       <section className="rounded-lg border border-radar-line bg-white p-5 shadow-card dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-radar-ink">오늘 눈에 띄는 세부 섹터</h2>
+            <h2 className="text-lg font-black text-radar-ink">오늘 눈에 띄는 메인 섹터</h2>
             <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
-              {filterLabel} 안에서 움직임이 큰 세부 섹터를 넓은 카드로 펼쳐 봅니다. 종목 구성, 강세 후보, ETF/해외 참고축까지 한 번에 확인합니다.
+              세부 부품 카드 대신 큰 산업 축 기준으로 오늘 강한 흐름을 먼저 봅니다. 종목 등락률은 당일 등락률 기준으로 표시합니다.
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            세부 섹터 {spotlightNodes.length}
+            대표 산업 {visibleScenarioCards.length}
           </span>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-4 max-2xl:grid-cols-2 max-lg:grid-cols-1">
-          {spotlightNodes.map((item) => (
-            <ScenarioSpotlightCard key={`${item.scenario.id}-${item.node.id}`} item={item} />
+          {visibleScenarioCards.map((overview) => (
+            <ScenarioMainSectorCard key={overview.scenario.id} overview={overview} />
           ))}
         </div>
       </section>

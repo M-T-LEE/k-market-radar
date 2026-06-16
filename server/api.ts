@@ -22,7 +22,7 @@ import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const WARNING_LIMIT = 8;
-const DOMESTIC_INDEX_TIMEOUT_MS = 900;
+const DOMESTIC_INDEX_TIMEOUT_MS = 350;
 const OPTIONAL_API_TIMEOUT_MS = 1000;
 const FMP_UNIVERSE_TIMEOUT_MS = 1000;
 const SEC_METADATA_TIMEOUT_MS = 1000;
@@ -48,6 +48,17 @@ function numeric(value: unknown) {
   if (typeof value !== "string") return 0;
   const parsed = Number(value.replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function optionalNumeric(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+
+  const trimmed = value.replace(/,/g, "").replace(/%/g, "").trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function toKoreanMarketCap(value: number) {
@@ -102,12 +113,11 @@ function quoteProviderFromSource(source: Quote["source"]): NonNullable<Stock["qu
 function applyDomesticQuote(stock: Stock, quote: Quote): Stock {
   return {
     ...stock,
-    currentPrice: quote.price || stock.currentPrice,
+    currentPrice: quote.price ?? stock.currentPrice,
     dailyChange: quote.change ?? stock.dailyChange,
     dailyChangeRate: quote.changeRate ?? stock.dailyChangeRate,
-    priceChange3M: quote.changeRate ?? stock.priceChange3M,
-    volume: quote.volume || stock.volume,
-    marketCap: quote.marketCap || stock.marketCap,
+    volume: quote.volume ?? stock.volume,
+    marketCap: quote.marketCap ?? stock.marketCap,
     quoteProvider: quoteProviderFromSource(quote.source),
     quoteSourceLabel: quote.sourceLabel,
     quoteUpdatedAt: quote.updatedAt,
@@ -393,24 +403,28 @@ async function overlayFmpQuotes(stocks: Stock[], apiKey: string) {
     const quote = quoteMap.get(stock.id);
     if (!quote) return stock;
 
-    const priceAvg200 = numeric(quote.priceAvg200);
-    const price = numeric(quote.price);
-    const changePercentage = numeric(quote.changePercentage);
+    const priceAvg200 = optionalNumeric(quote.priceAvg200);
+    const price = optionalNumeric(quote.price);
+    const change = optionalNumeric(quote.change);
+    const changePercentage = optionalNumeric(quote.changePercentage);
+    const marketCap = optionalNumeric(quote.marketCap);
+    const yearHigh = optionalNumeric(quote.yearHigh);
+    const yearLow = optionalNumeric(quote.yearLow);
+    const timestamp = optionalNumeric(quote.timestamp);
 
     return {
       ...stock,
-      currentPrice: price || stock.currentPrice,
-      marketCap: numeric(quote.marketCap) ? numeric(quote.marketCap) / 100000000 : stock.marketCap,
-      fiftyTwoWeekHigh: numeric(quote.yearHigh) || stock.fiftyTwoWeekHigh,
-      fiftyTwoWeekLow: numeric(quote.yearLow) || stock.fiftyTwoWeekLow,
-      dailyChange: numeric(quote.change) || stock.dailyChange,
-      dailyChangeRate: changePercentage || stock.dailyChangeRate,
-      priceChange3M: changePercentage || stock.priceChange3M,
-      ma200Gap: priceAvg200 ? ((price - priceAvg200) / priceAvg200) * 100 : stock.ma200Gap,
+      currentPrice: price ?? stock.currentPrice,
+      marketCap: marketCap !== undefined ? marketCap / 100000000 : stock.marketCap,
+      fiftyTwoWeekHigh: yearHigh ?? stock.fiftyTwoWeekHigh,
+      fiftyTwoWeekLow: yearLow ?? stock.fiftyTwoWeekLow,
+      dailyChange: change ?? stock.dailyChange,
+      dailyChangeRate: changePercentage ?? stock.dailyChangeRate,
+      ma200Gap: price !== undefined && priceAvg200 ? ((price - priceAvg200) / priceAvg200) * 100 : stock.ma200Gap,
       quoteProvider: "fmpQuoteProvider" as const,
       quoteSourceLabel: "FMP 참고 시세",
       quoteUpdatedAt: new Date().toISOString(),
-      quoteAsOf: quote.timestamp ? new Date(numeric(quote.timestamp) * 1000).toISOString() : new Date().toISOString(),
+      quoteAsOf: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
       quoteIsRealtime: false,
       quoteNote: "미국 종목 분석 대시보드용 참고 시세입니다."
     };
@@ -422,11 +436,11 @@ function overlayKrxStocks(stocks: Stock[], stockRows: Map<string, KrxRow>, optio
     const row = stockRows.get(stock.ticker);
     if (!row) return stock;
 
-    const close = numeric(row.TDD_CLSPRC);
-    const change = numeric(row.CMPPREVDD_PRC);
-    const marketCap = numeric(row.MKTCAP);
-    const changeRate = numeric(row.FLUC_RT);
-    const volume = numeric(row.ACC_TRDVOL);
+    const close = optionalNumeric(row.TDD_CLSPRC);
+    const change = optionalNumeric(row.CMPPREVDD_PRC);
+    const marketCap = optionalNumeric(row.MKTCAP);
+    const changeRate = optionalNumeric(row.FLUC_RT);
+    const volume = optionalNumeric(row.ACC_TRDVOL);
     const hasNaverDelayedQuote =
       stock.quoteProvider === "naverUniverseProvider" ||
       stock.quoteProvider === "naverDelayedQuoteProvider" ||
@@ -435,12 +449,11 @@ function overlayKrxStocks(stocks: Stock[], stockRows: Map<string, KrxRow>, optio
 
     return {
       ...stock,
-      currentPrice: useKrxCurrent ? close || stock.currentPrice : stock.currentPrice,
-      marketCap: marketCap ? toKoreanMarketCap(marketCap) : stock.marketCap,
-      volume: volume || stock.volume,
-      dailyChange: useKrxCurrent ? change || stock.dailyChange : stock.dailyChange,
-      dailyChangeRate: useKrxCurrent ? changeRate || stock.dailyChangeRate : stock.dailyChangeRate,
-      priceChange3M: useKrxCurrent ? changeRate || stock.priceChange3M : stock.priceChange3M,
+      currentPrice: useKrxCurrent ? (close ?? stock.currentPrice) : stock.currentPrice,
+      marketCap: marketCap !== undefined ? toKoreanMarketCap(marketCap) : stock.marketCap,
+      volume: volume ?? stock.volume,
+      dailyChange: useKrxCurrent ? (change ?? stock.dailyChange) : stock.dailyChange,
+      dailyChangeRate: useKrxCurrent ? (changeRate ?? stock.dailyChangeRate) : stock.dailyChangeRate,
       quoteProvider: useKrxCurrent ? "krxDailyProvider" : stock.quoteProvider,
       quoteSourceLabel: useKrxCurrent ? "KRX 일별 종가" : stock.quoteSourceLabel,
       quoteUpdatedAt: useKrxCurrent ? krxDateToIso(row.BAS_DD) : stock.quoteUpdatedAt,

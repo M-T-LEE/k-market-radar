@@ -21,9 +21,7 @@ export function StockExternalLink({
   };
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
     event.stopPropagation();
-    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLAnchorElement>) => {

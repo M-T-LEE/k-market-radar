@@ -1156,13 +1156,12 @@ export default function Screener() {
                         />
                       </button>
                       <div>
-                        <Link
-                          to={`/valuation?stock=${stock.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className="font-black hover:text-blue-700"
+                        <button
+                          type="button"
+                          className="text-left font-black hover:text-blue-700"
                         >
                           {stock.name}
-                        </Link>
+                        </button>
                         <p className="text-xs font-bold text-slate-400">{stock.ticker}</p>
                         <p className="mt-1 text-[11px] font-black text-slate-500">{getAssetTypeLabel(stock)}</p>
                       </div>
@@ -1255,7 +1254,7 @@ export default function Screener() {
               onClick={() => setIsDetailOpen(false)}
               className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]"
             />
-            <aside className="fixed right-0 top-0 z-50 h-screen w-[min(640px,calc(100vw-24px))] overflow-y-auto border-l border-radar-line bg-white p-6 shadow-2xl dark:bg-slate-900">
+            <aside className="fixed inset-x-0 bottom-0 top-auto z-50 max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border-t border-radar-line bg-white p-5 shadow-2xl dark:bg-slate-900 sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-screen sm:max-h-none sm:w-[min(640px,calc(100vw-24px))] sm:rounded-none sm:border-l sm:border-t-0 sm:p-6">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-xs font-black text-blue-600">종목 상세 점수</p>

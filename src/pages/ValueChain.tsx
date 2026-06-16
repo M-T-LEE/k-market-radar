@@ -524,6 +524,10 @@ export default function ValueChain() {
   const selectedScenario = selectedView ? scenarios.find((scenario) => scenario.id === selectedView.scenarioId) : undefined;
 
   const selectChain = (chain: ValueChainTableRow) => {
+    setSelected(chain);
+    setSelectedCompany(chain.selectedCompany);
+    setIsDetailOpen(true);
+
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("scenario", chain.scenarioId);
     nextParams.set("chain", chain.id);
@@ -712,9 +716,11 @@ export default function ValueChain() {
           .sort((a, b) => b.marketConfirmationScore - a.marketConfirmationScore)
           .slice(0, 3)
           .map((chain) => (
-            <article
+            <button
+              type="button"
+              onClick={() => selectChain(chain)}
               key={chain.id}
-              className="rounded-lg border border-radar-line bg-white p-4 text-left shadow-card"
+              className="rounded-lg border border-radar-line bg-white p-4 text-left shadow-card transition hover:border-blue-200 hover:bg-blue-50/60 focus:outline-none focus:ring-2 focus:ring-blue-300"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -738,7 +744,7 @@ export default function ValueChain() {
               <p className="mt-2 text-xs font-bold text-slate-500">
                 평균 {chain.averageDailyChange >= 0 ? "+" : ""}{chain.averageDailyChange.toFixed(1)}% · 관련 {chain.relatedCount}개 · 대표 {chain.leaderName ?? chain.selectedCompany}
               </p>
-            </article>
+            </button>
           ))}
       </section>
 
@@ -760,7 +766,7 @@ export default function ValueChain() {
               onClick={() => setIsDetailOpen(false)}
               className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]"
             />
-            <aside className="fixed right-0 top-0 z-50 h-screen w-[min(540px,calc(100vw-24px))] overflow-y-auto border-l border-radar-line bg-white p-6 shadow-2xl dark:bg-slate-900">
+            <aside className="fixed inset-x-0 bottom-0 top-auto z-50 max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border-t border-radar-line bg-white p-5 shadow-2xl dark:bg-slate-900 sm:bottom-auto sm:left-auto sm:right-0 sm:top-0 sm:h-screen sm:max-h-none sm:w-[min(540px,calc(100vw-24px))] sm:rounded-none sm:border-l sm:border-t-0 sm:p-6">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-bold text-blue-600">{selectedView.name}</p>

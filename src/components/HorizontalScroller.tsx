@@ -72,6 +72,13 @@ export function HorizontalScroller({
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("a,button,input,select,textarea,[data-no-drag]")
+    ) {
+      return;
+    }
+
     const viewport = viewportRef.current;
     if (!viewport) return;
 
