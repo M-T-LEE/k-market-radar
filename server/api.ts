@@ -22,6 +22,7 @@ import { loadServerEnv, type ServerEnv as Env } from "./runtimeEnv.js";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const WARNING_LIMIT = 8;
+const DOMESTIC_INDEX_TIMEOUT_MS = 900;
 const OPTIONAL_API_TIMEOUT_MS = 1000;
 const FMP_UNIVERSE_TIMEOUT_MS = 1000;
 const SEC_METADATA_TIMEOUT_MS = 1000;
@@ -616,6 +617,80 @@ function mergeIndices(current: MarketIndexSnapshot[], additions: MarketIndexSnap
   return Array.from(byName.values());
 }
 
+async function applyFreshDomesticIndices(
+  snapshot: MarketDataSnapshot,
+  options: { timeoutMs?: number; warn?: boolean } = {}
+): Promise<MarketDataSnapshot> {
+  const sourceStatus: MarketDataSourceStatus = {
+    ...snapshot.sourceStatus,
+    naverDelayedIndexProvider:
+      snapshot.sourceStatus.naverDelayedIndexProvider === "disabled" ? "fallback" : snapshot.sourceStatus.naverDelayedIndexProvider
+  };
+  const warnings = [...snapshot.warnings];
+
+  try {
+    const domesticIndices = await withTimeout(
+      getNaverDelayedIndices(["KOSPI", "KOSDAQ"]),
+      options.timeoutMs ?? DOMESTIC_INDEX_TIMEOUT_MS,
+      "Naver delayed domestic indices"
+    );
+
+    return {
+      ...snapshot,
+      indices: mergeIndices(snapshot.indices, domesticIndices),
+      sourceStatus: {
+        ...sourceStatus,
+        naverDelayedIndexProvider: "live"
+      },
+      warnings
+    };
+  } catch (error) {
+    if (options.warn) {
+      pushWarning(
+        warnings,
+        error instanceof Error
+          ? `Naver delayed domestic index refresh failed: ${error.message}`
+          : "Naver delayed domestic index refresh failed"
+      );
+    }
+
+    return {
+      ...snapshot,
+      sourceStatus: {
+        ...sourceStatus,
+        naverDelayedIndexProvider: sourceStatus.naverDelayedIndexProvider === "live" ? "partial" : "error"
+      },
+      warnings
+    };
+  }
+}
+
+async function refreshDomesticIndices(
+  indices: MarketIndexSnapshot[],
+  sourceStatus: MarketDataSourceStatus,
+  warnings: string[],
+  options: { timeoutMs?: number; warn?: boolean } = {}
+) {
+  const refreshed = await applyFreshDomesticIndices(
+    {
+      generatedAt: new Date().toISOString(),
+      indices,
+      stocks: fallbackStocks,
+      issues: fallbackIssues,
+      alerts: fallbackAlerts,
+      sourceStatus,
+      warnings
+    },
+    options
+  );
+
+  return {
+    indices: refreshed.indices,
+    sourceStatus: refreshed.sourceStatus,
+    warnings: refreshed.warnings
+  };
+}
+
 function setStooqStatus(sourceStatus: MarketDataSourceStatus, failuresLength: number) {
   sourceStatus.stooqQuoteProvider = failuresLength ? "partial" : "live";
 }
@@ -639,7 +714,7 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   }
   sourceStatus.krxDailyProvider = env.KRX_API_KEY ? "fallback" : "disabled";
   sourceStatus.krx = env.KRX_API_KEY ? "fallback" : "disabled";
-  sourceStatus.naverDelayedIndexProvider = env.KRX_API_KEY ? "disabled" : "fallback";
+  sourceStatus.naverDelayedIndexProvider = "fallback";
 
   if (!env.KRX_API_KEY) {
     try {
@@ -665,7 +740,6 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
       domesticUniverseLoaded = true;
       sourceStatus.krxDailyProvider = "live";
       sourceStatus.krx = "live";
-      sourceStatus.naverDelayedIndexProvider = "disabled";
       sourceStatus.naverUniverseProvider = "disabled";
       sourceStatus.naverDelayedQuoteProvider = "disabled";
     } catch (error) {
@@ -680,19 +754,14 @@ async function buildFreshMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     }
   }
 
-  if (sourceStatus.krx !== "live" && sourceStatus.naverDelayedIndexProvider !== "live") {
-    try {
-      indices = await getNaverDelayedIndices(["KOSPI", "KOSDAQ"]);
-      sourceStatus.naverDelayedIndexProvider = "live";
-    } catch (error) {
-      sourceStatus.naverDelayedIndexProvider = "error";
-      pushWarning(
-        warnings,
-        error instanceof Error
-          ? `Naver delayed index provider failed: ${error.message}`
-          : "Naver delayed index provider failed"
-      );
-    }
+  {
+    const domesticIndexRefresh = await refreshDomesticIndices(indices, sourceStatus, warnings, {
+      timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS,
+      warn: sourceStatus.naverDelayedIndexProvider !== "live"
+    });
+    indices = domesticIndexRefresh.indices;
+    Object.assign(sourceStatus, domesticIndexRefresh.sourceStatus);
+    warnings.splice(0, warnings.length, ...domesticIndexRefresh.warnings);
   }
 
   try {
@@ -999,14 +1068,17 @@ async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
   const now = Date.now();
 
   if (cachedSnapshot && cachedSnapshot.expiresAt > now) {
-    return cachedSnapshot.data;
+    return applyFreshDomesticIndices(cachedSnapshot.data, { timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS });
   }
 
   if (cachedSnapshot && cachedSnapshot.expiresAt + STALE_CACHE_TTL_MS > now) {
     void startSnapshotBuild().catch(() => undefined);
-    return withSnapshotWarning(
-      cachedSnapshot.data,
-      "\uCD5C\uC2E0 \uB370\uC774\uD130 \uAC31\uC2E0 \uC911\uC785\uB2C8\uB2E4. \uC9C1\uC804 \uB370\uC774\uD130\uC14B\uC744 \uBA3C\uC800 \uD45C\uC2DC\uD569\uB2C8\uB2E4."
+    return applyFreshDomesticIndices(
+      withSnapshotWarning(
+        cachedSnapshot.data,
+        "\uCD5C\uC2E0 \uB370\uC774\uD130 \uAC31\uC2E0 \uC911\uC785\uB2C8\uB2E4. \uC9C1\uC804 \uB370\uC774\uD130\uC14B\uC744 \uBA3C\uC800 \uD45C\uC2DC\uD569\uB2C8\uB2E4."
+      ),
+      { timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS }
     );
   }
 
@@ -1027,12 +1099,12 @@ async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     newsApi: env.NEWS_API_KEY ? "fallback" : "disabled",
     krxDailyProvider: env.KRX_API_KEY ? "fallback" : "disabled",
     krx: env.KRX_API_KEY ? "fallback" : "disabled",
-    naverDelayedIndexProvider: env.KRX_API_KEY ? "disabled" : "fallback"
+    naverDelayedIndexProvider: "fallback"
   });
 
   void startSnapshotBuild().catch(() => undefined);
 
-  return {
+  return applyFreshDomesticIndices({
     generatedAt: new Date().toISOString(),
     indices: buildFallbackIndices(),
     stocks: fallbackStocks,
@@ -1042,7 +1114,7 @@ async function buildFastMarketDataSnapshot(): Promise<MarketDataSnapshot> {
     warnings: [
       "\uBE60\uB978 \uC751\uB2F5 \uBAA8\uB4DC: \uBCF4\uC644 \uB370\uC774\uD130\uB97C \uC989\uC2DC \uD45C\uC2DC\uD558\uACE0 \uCD5C\uC2E0 KRX \uB370\uC774\uD130\uB294 \uBC31\uADF8\uB77C\uC6B4\uB4DC\uC5D0\uC11C \uAC31\uC2E0\uD569\uB2C8\uB2E4."
     ]
-  };
+  }, { timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS });
 }
 
 export async function buildMarketDataSnapshot(options: { fast?: boolean } = {}): Promise<MarketDataSnapshot> {
@@ -1053,12 +1125,15 @@ export async function buildMarketDataSnapshot(options: { fast?: boolean } = {}):
   const now = Date.now();
 
   if (cachedSnapshot && cachedSnapshot.expiresAt > now) {
-    return cachedSnapshot.data;
+    return applyFreshDomesticIndices(cachedSnapshot.data, { timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS });
   }
 
   if (cachedSnapshot && cachedSnapshot.expiresAt + STALE_CACHE_TTL_MS > now) {
     void startSnapshotBuild().catch(() => undefined);
-    return withSnapshotWarning(cachedSnapshot.data, "최신 데이터 갱신 중입니다. 직전 스냅샷을 먼저 표시합니다.");
+    return applyFreshDomesticIndices(
+      withSnapshotWarning(cachedSnapshot.data, "최신 데이터 갱신 중입니다. 직전 데이터셋을 먼저 표시합니다."),
+      { timeoutMs: DOMESTIC_INDEX_TIMEOUT_MS }
+    );
   }
 
   return startSnapshotBuild();
@@ -1169,7 +1244,7 @@ export function registerApiRoutes(viteServer: ViteDevServer) {
       const data = await buildMarketDataSnapshot({ fast });
       res.setHeader(
         "Cache-Control",
-        fast ? "public, max-age=15, s-maxage=60, stale-while-revalidate=300" : "public, max-age=60, s-maxage=300, stale-while-revalidate=900"
+        fast ? "public, max-age=5, s-maxage=20, stale-while-revalidate=60" : "public, max-age=15, s-maxage=60, stale-while-revalidate=180"
       );
       jsonResponse(res, 200, data);
     } catch (error) {

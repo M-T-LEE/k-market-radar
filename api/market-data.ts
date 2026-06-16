@@ -12,7 +12,7 @@ export default async function handler(req: ServerlessRequest, res: ServerRespons
     const requestUrl = new URL(req.url ?? "/api/market-data", "http://localhost");
     const fast = requestUrl.searchParams.get("mode") === "fast" || requestUrl.searchParams.get("fast") === "1";
     const data = await buildMarketDataSnapshot({ fast });
-    res.setHeader("Cache-Control", fast ? "s-maxage=60, stale-while-revalidate=300" : "s-maxage=300, stale-while-revalidate=900");
+    res.setHeader("Cache-Control", fast ? "s-maxage=20, stale-while-revalidate=60" : "s-maxage=60, stale-while-revalidate=180");
     sendJson(res, 200, data);
   } catch (error) {
     res.setHeader("Cache-Control", "no-store");

@@ -123,7 +123,13 @@ function stockRank(stock: Stock) {
 }
 
 function getStockMove(stock: Stock) {
-  return stock.dailyChangeRate ?? stock.priceChange3M ?? 0;
+  return typeof stock.dailyChangeRate === "number" && Number.isFinite(stock.dailyChangeRate)
+    ? stock.dailyChangeRate
+    : 0;
+}
+
+function getStockTrendMove(stock: Stock) {
+  return Number.isFinite(stock.priceChange3M) ? stock.priceChange3M : 0;
 }
 
 function getBreadth(stocks: Stock[]) {
@@ -447,7 +453,10 @@ function getNodeRelatedStocks(node: ScenarioMapNode, scenario: Scenario, stocks:
     const bStock = b.stock;
     const rankDiff = stockRank(aStock) - stockRank(bStock);
     if (rankDiff) return rankDiff;
-    return Math.abs(getStockMove(bStock)) - Math.abs(getStockMove(aStock));
+    return (
+      Math.abs(getStockMove(bStock)) - Math.abs(getStockMove(aStock)) ||
+      getStockTrendMove(bStock) - getStockTrendMove(aStock)
+    );
   }).map((item) => item.stock);
 }
 
@@ -499,7 +508,10 @@ function getLinkedChainStocks(chain: LinkedValueChain, stocks: Stock[]) {
       if (scoreDiff) return scoreDiff;
       const rankDiff = stockRank(a.stock) - stockRank(b.stock);
       if (rankDiff) return rankDiff;
-      return Math.abs(getStockMove(b.stock)) - Math.abs(getStockMove(a.stock));
+      return (
+        Math.abs(getStockMove(b.stock)) - Math.abs(getStockMove(a.stock)) ||
+        getStockTrendMove(b.stock) - getStockTrendMove(a.stock)
+      );
     })
     .map((item) => item.stock);
 }
@@ -596,7 +608,7 @@ function summarizeStocksLight(relatedStocks: Stock[]): ScenarioNodeSummary {
   const related = Array.from(new Map(relatedStocks.map((stock) => [stock.id, stock])).values()).sort((a, b) => {
     const rankDiff = stockRank(a) - stockRank(b);
     if (rankDiff) return rankDiff;
-    return getStockMove(b) - getStockMove(a);
+    return getStockMove(b) - getStockMove(a) || getStockTrendMove(b) - getStockTrendMove(a);
   });
   const commonStocks = related.filter(isCommonStock);
   const etfStocks = related.filter(isEtf);
@@ -678,7 +690,7 @@ function getLightNodeStocks(node: ScenarioMapNode, scenario: Scenario, indexedSt
       if (scoreDiff) return scoreDiff;
       const rankDiff = stockRank(a.stock) - stockRank(b.stock);
       if (rankDiff) return rankDiff;
-      return getStockMove(b.stock) - getStockMove(a.stock);
+      return getStockMove(b.stock) - getStockMove(a.stock) || getStockTrendMove(b.stock) - getStockTrendMove(a.stock);
     })
     .map((item) => item.stock);
 
@@ -693,7 +705,7 @@ function getLightNodeStocks(node: ScenarioMapNode, scenario: Scenario, indexedSt
 function getStrongStocksForNode(summary: ScenarioNodeSummary) {
   const candidates = prioritizeDomesticStocks(summary.commonStocks)
     .filter((stock) => isDomesticMarket(stock) && isCommonStock(stock))
-    .sort((a, b) => getStockMove(b) - getStockMove(a));
+    .sort((a, b) => getStockMove(b) - getStockMove(a) || getStockTrendMove(b) - getStockTrendMove(a));
   const positiveStocks = candidates.filter((stock) => getStockMove(stock) > 0);
   const relativeLeaders = candidates.filter((stock) => getStockMove(stock) >= summary.averageChange);
   const pool = positiveStocks.length ? positiveStocks : relativeLeaders.length ? relativeLeaders : candidates;
@@ -728,7 +740,7 @@ function getScenarioStocksLight(scenario: Scenario, indexedStocks: IndexedStock[
       if (scoreDiff) return scoreDiff;
       const rankDiff = stockRank(a.stock) - stockRank(b.stock);
       if (rankDiff) return rankDiff;
-      return getStockMove(b.stock) - getStockMove(a.stock);
+      return getStockMove(b.stock) - getStockMove(a.stock) || getStockTrendMove(b.stock) - getStockTrendMove(a.stock);
     });
 
   return matched.length ? matched : indexedStocks.filter((item) => isDomesticMarket(item.stock));
@@ -756,7 +768,9 @@ function buildScenarioOverview(scenario: Scenario, indexedStocks: IndexedStock[]
   });
 
   const relatedStocks = Array.from(relatedStockMap.values());
-  const strongStocks = Array.from(strongStockMap.values()).sort((a, b) => getStockMove(b) - getStockMove(a));
+  const strongStocks = Array.from(strongStockMap.values()).sort(
+    (a, b) => getStockMove(b) - getStockMove(a) || getStockTrendMove(b) - getStockTrendMove(a)
+  );
   const averageChange = relatedStocks.length
     ? relatedStocks.reduce((sum, stock) => sum + getStockMove(stock), 0) / relatedStocks.length
     : 0;

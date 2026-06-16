@@ -15,8 +15,8 @@ import { filterActionableAlerts } from "../lib/alertFilters";
 import type { MarketDataSnapshot } from "../types/marketData";
 
 const SNAPSHOT_STORAGE_KEY = "k-market-radar:market-data-snapshot";
-const SNAPSHOT_STORAGE_TTL_MS = 6 * 60 * 60 * 1000;
-const FAST_MARKET_DATA_TIMEOUT_MS = 650;
+const SNAPSHOT_STORAGE_TTL_MS = 5 * 60 * 1000;
+const FAST_MARKET_DATA_TIMEOUT_MS = 1500;
 const FULL_MARKET_DATA_TIMEOUT_MS = 8 * 1000;
 const INITIAL_REFRESH_DELAY_MS = 80;
 
@@ -144,7 +144,7 @@ async function fetchSnapshot(path: string, timeoutMs: number) {
   const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(path, { signal: controller.signal });
+    const response = await fetch(path, { signal: controller.signal, cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(`market-data ${response.status}`);

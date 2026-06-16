@@ -240,8 +240,64 @@ type ScoredScreenerStock = Stock & {
   technicalSignalStrength: number;
 };
 
+function getDailyMove(stock: Stock) {
+  return typeof stock.dailyChangeRate === "number" && Number.isFinite(stock.dailyChangeRate)
+    ? stock.dailyChangeRate
+    : 0;
+}
+
+function getTrendMove(stock: Stock) {
+  return Number.isFinite(stock.priceChange3M) ? stock.priceChange3M : 0;
+}
+
+function EarningsOutlookPanel({ stock }: { stock: Stock }) {
+  const metrics = [
+    { label: "컨센서스 매출액", value: "연동 대기", note: "외부 컨센서스 API 연결 필요" },
+    { label: "컨센서스 영업이익", value: "연동 대기", note: "외부 컨센서스 API 연결 필요" },
+    { label: "예상 EPS 성장", value: formatPercent(stock.epsEstimateGrowthRate), note: "현재 보유 추정치" },
+    { label: "영업이익률", value: formatPercent(stock.operatingMargin), note: "수익성 방어력" }
+  ];
+  const history = [
+    { label: "최근 분기 매출", value: stock.quarterlyRevenueGrowth },
+    { label: "최근 분기 영업이익", value: stock.quarterlyOperatingProfitGrowth },
+    { label: "3개년 매출", value: stock.revenueGrowth3Y },
+    { label: "3개년 영업이익", value: stock.operatingProfitGrowth3Y }
+  ];
+
+  return (
+    <div className="rounded-lg border border-radar-line bg-white p-4 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black text-slate-500">실적 전망과 최근 흐름</p>
+          <h3 className="mt-1 text-lg font-black text-radar-ink">컨센서스 연결 자리</h3>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          데이터 확장 준비
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/70">
+            <p className="text-[11px] font-black text-slate-500">{metric.label}</p>
+            <p className="mt-1 text-base font-black text-radar-ink dark:text-slate-50">{metric.value}</p>
+            <p className="mt-1 text-[11px] font-bold text-slate-500">{metric.note}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-lg border border-radar-line">
+        {history.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-3 border-b border-radar-line px-3 py-2 last:border-b-0">
+            <span className="text-xs font-bold text-slate-500">{item.label}</span>
+            <span className={cn("text-sm font-black", getMarketMoveTextClass(item.value))}>{formatPercent(item.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function isNewCapturedStock(stock: ScoredScreenerStock) {
-  const move = stock.dailyChangeRate ?? stock.priceChange3M;
+  const move = getDailyMove(stock);
   return stock.computedScore >= 70 && (stock.technicalSignals.length > 0 || move >= 3);
 }
 
@@ -261,7 +317,7 @@ function getScenarioChainSummary(scenario: Scenario | null, fallback: string) {
 function getCaptureReasons(stock: ScoredScreenerStock) {
   const structuralCore = Math.round((stock.scoreProfile.valueChainScore + stock.scoreProfile.companyCentralityScore) / 2);
   const earningsValue = Math.round((stock.scoreProfile.earningsLinkScore + stock.scoreProfile.valuationJustificationScore) / 2);
-  const dailyMove = stock.dailyChangeRate ?? stock.priceChange3M;
+  const dailyMove = getDailyMove(stock);
   const reasons: string[] = [];
 
   if (stock.scoreProfile.marketAttentionScore >= 85) {
@@ -307,7 +363,7 @@ function sortStocks<
     case "선반영위험 낮은 순":
       return copied.sort((a, b) => a.computedRisk - b.computedRisk);
     case "등락률 높은 순":
-      return copied.sort((a, b) => (b.dailyChangeRate ?? b.priceChange3M) - (a.dailyChangeRate ?? a.priceChange3M));
+      return copied.sort((a, b) => getDailyMove(b) - getDailyMove(a) || getTrendMove(b) - getTrendMove(a));
     case "기술신호 강한 순":
       return copied.sort((a, b) => b.technicalSignalStrength - a.technicalSignalStrength);
     default:
@@ -696,7 +752,7 @@ export default function Screener() {
     const count = filtered.length;
     const avgScore = count ? Math.round(filtered.reduce((sum, stock) => sum + stock.computedScore, 0) / count) : 0;
     const avgMove = count
-      ? filtered.reduce((sum, stock) => sum + (stock.dailyChangeRate ?? stock.priceChange3M), 0) / count
+      ? filtered.reduce((sum, stock) => sum + getDailyMove(stock), 0) / count
       : 0;
     const technicalCount = filtered.filter((stock) => stock.technicalSignals.length).length;
     const favoritesInResult = filtered.filter((stock) => isFavorite(stock.id)).length;
@@ -1129,8 +1185,8 @@ export default function Screener() {
                 <td className="whitespace-nowrap px-4 py-4 font-black">{formatStockMarketCap(stock)}</td>
                 <td className="whitespace-nowrap px-4 py-4">
                   <p className="font-black">{formatStockPrice(stock)}</p>
-                  <p className={cn("mt-1 text-xs font-black", getMarketMoveTextClass(stock.dailyChangeRate ?? stock.priceChange3M))}>
-                    {formatPercent(stock.dailyChangeRate ?? stock.priceChange3M)}
+                  <p className={cn("mt-1 text-xs font-black", getMarketMoveTextClass(getDailyMove(stock)))}>
+                    {formatPercent(getDailyMove(stock))}
                   </p>
                 </td>
                 <td className="px-4 py-4">
@@ -1226,8 +1282,8 @@ export default function Screener() {
                     <div>
                       <p className="text-xs font-black text-slate-500">현재가</p>
                       <p className="mt-1 text-xl font-black text-radar-ink">{formatStockPrice(selected)}</p>
-                      <p className={cn("mt-1 text-xs font-black", getMarketMoveTextClass(selected.dailyChangeRate ?? selected.priceChange3M))}>
-                        {formatPercent(selected.dailyChangeRate ?? selected.priceChange3M)}
+                      <p className={cn("mt-1 text-xs font-black", getMarketMoveTextClass(getDailyMove(selected)))}>
+                        {formatPercent(getDailyMove(selected))}
                       </p>
                     </div>
                     <div>
@@ -1290,6 +1346,7 @@ export default function Screener() {
                   ) : null}
                 </div>
                 <RadarScoreCard stock={selected} />
+                <EarningsOutlookPanel stock={selected} />
                 <StockWarningPanel stock={selected} />
                 <ScoreContributionPanel stock={selected} />
                 <ScoreTrendPanel stock={selected} />

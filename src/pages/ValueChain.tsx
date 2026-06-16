@@ -32,6 +32,16 @@ function average(values: number[]) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
+function getDailyMove(stock: Stock) {
+  return typeof stock.dailyChangeRate === "number" && Number.isFinite(stock.dailyChangeRate)
+    ? stock.dailyChangeRate
+    : 0;
+}
+
+function getTrendMove(stock: Stock) {
+  return Number.isFinite(stock.priceChange3M) ? stock.priceChange3M : 0;
+}
+
 function isDomesticStock(stock: Stock) {
   return stock.market === "KOSPI" || stock.market === "KOSDAQ";
 }
@@ -344,7 +354,7 @@ function matchesValueChainQuery(chain: ValueChainTableRow, query: string, scenar
 
 function getCompanyProfile(company: string, chain: ValueChainTableRow, stock?: Stock) {
   const specialty = companySpecialties[company] ?? `${company}는 ${chain.name} 밸류체인에서 ${chain.coreTechnology} 노출을 확인하기 위한 대표 관찰 기업입니다.`;
-  const dailyMove = stock ? stock.dailyChangeRate ?? stock.priceChange3M : chain.averageDailyChange;
+  const dailyMove = stock ? getDailyMove(stock) : chain.averageDailyChange;
   const momentumLabel = dailyMove >= 3 ? "단기 시장 반응이 강한 구간" : dailyMove >= 0 ? "시장 반응이 유지되는 구간" : "단기 수급 확인이 필요한 구간";
   const roleLabel = stock
     ? stock.earningsLinkScore >= 78
@@ -380,7 +390,7 @@ function getCompanyProfile(company: string, chain: ValueChainTableRow, stock?: S
   ];
   const risks = [
     ...(stock && stock.preReflectionRiskScore >= 65 ? [`선반영위험 ${Math.round(stock.preReflectionRiskScore)}점으로 주가 기대 반영 여부 확인 필요`] : []),
-    ...(stock && (stock.dailyChangeRate ?? stock.priceChange3M) < -3 ? ["단기 가격 흐름이 약해 수급 반전 확인 필요"] : []),
+    ...(stock && getDailyMove(stock) < -3 ? ["단기 가격 흐름이 약해 수급 반전 확인 필요"] : []),
     ...(stock && stock.quarterlyOperatingProfitGrowth < 0 ? ["분기 영업이익 모멘텀 둔화 여부 확인 필요"] : []),
     ...chain.risks
   ].filter((item, index, array) => array.indexOf(item) === index).slice(0, 5);
@@ -397,12 +407,12 @@ function buildValueChainRow(chain: (typeof valueChains)[number], stocks: Stock[]
   const selectedCompany = representativeCompanies.includes(chain.selectedCompany)
     ? chain.selectedCompany
     : representativeCompanies[0] ?? "국내 매칭 대기";
-  const marketDailyChanges = stocks.map((stock) => stock.dailyChangeRate ?? stock.priceChange3M);
-  const marketTrendChanges = stocks.map((stock) => stock.priceChange3M);
+  const marketDailyChanges = stocks.map(getDailyMove);
+  const marketTrendChanges = stocks.map(getTrendMove);
   const marketAverageAbsoluteDailyChange = average(marketDailyChanges.map((change) => Math.abs(change)));
   const marketAverageAbsoluteTrend = average(marketTrendChanges.map((change) => Math.abs(change)));
-  const dailyChanges = relatedStocks.map((stock) => stock.dailyChangeRate ?? stock.priceChange3M);
-  const trendChanges = relatedStocks.map((stock) => stock.priceChange3M);
+  const dailyChanges = relatedStocks.map(getDailyMove);
+  const trendChanges = relatedStocks.map(getTrendMove);
   const averageDailyChange = average(dailyChanges);
   const averageTrend = average(trendChanges);
   const averageAbsoluteDailyChange = average(dailyChanges.map((change) => Math.abs(change)));
@@ -410,13 +420,13 @@ function buildValueChainRow(chain: (typeof valueChains)[number], stocks: Stock[]
   const relativeDailyActivity = Math.max(0, averageAbsoluteDailyChange - marketAverageAbsoluteDailyChange);
   const relativeTrendActivity = Math.max(0, averageAbsoluteTrend - marketAverageAbsoluteTrend);
   const breadth = relatedStocks.length
-    ? (relatedStocks.filter((stock) => (stock.dailyChangeRate ?? stock.priceChange3M) > 0).length / relatedStocks.length) * 100
+    ? (relatedStocks.filter((stock) => getDailyMove(stock) > 0).length / relatedStocks.length) * 100
     : 35;
   const leader = relatedStocks
     .slice()
-    .sort((a, b) => (b.dailyChangeRate ?? b.priceChange3M) - (a.dailyChangeRate ?? a.priceChange3M))[0];
+    .sort((a, b) => Math.abs(getDailyMove(b)) - Math.abs(getDailyMove(a)) || getTrendMove(b) - getTrendMove(a))[0];
   const breadthConviction = Math.abs(breadth - 50);
-  const leaderMove = leader ? leader.dailyChangeRate ?? leader.priceChange3M : 0;
+  const leaderMove = leader ? getDailyMove(leader) : 0;
   const leaderActivity = Math.abs(leaderMove);
   const structuralCentralityScore = calculateStructuralCentrality(chain);
   const marketConfirmationScore = Math.round(
@@ -591,7 +601,7 @@ export default function ValueChain() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-bold text-slate-600">
-            주요 산업의 밸류체인을 산업 병목도, 시장 유동성, 시장 반응으로 나누어 분석합니다. 대표기업은 2026-05-31 기준 공개자료와 현재 universe 흐름을 반영해 재점검했습니다.
+            주요 산업의 밸류체인을 구조적 병목, 거래·가격 활동성, 실제 방향성 반응으로 나누어 분석합니다. 대표기업은 2026-05-31 기준 공개자료와 현재 universe 흐름을 반영해 재점검했습니다.
           </p>
           <p className="mt-1 text-xs font-black text-blue-600">
             밸류체인 목록의 행을 클릭하면 오른쪽에서 상세 분석 패널이 열립니다.
@@ -688,8 +698,8 @@ export default function ValueChain() {
           <div>
             <h3 className="font-black text-blue-700">전체 산업 분석 인사이트</h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              밸류체인은 구조적으로 중요한 구간과 현재 시장이 실제로 가격·수급으로 확인해주는 구간을 분리해서 봐야 합니다.
-              산업 병목도가 높아도 시장 유동성과 시장 반응이 낮으면 후행 관찰 영역으로 두고, 시장 반응이 강하지만 실적 연결성이 낮으면 과열 주의로 분리합니다.
+              밸류체인은 구조적으로 중요한 구간과 현재 시장이 실제로 움직이고 있는 구간을 분리해서 봐야 합니다.
+              시장 유동성은 상승·하락 방향보다 움직임의 크기와 참여도를 보고, 시장 반응은 그 움직임이 가격 방향성과 실적 연결로 확인되는지를 봅니다.
               이 화면은 매주 대표기업·수급·가격 반응을 재점검해 주도, 동행, 후행 관찰, 소외, 과열 주의 상태를 갱신하는 구조입니다.
             </p>
           </div>
@@ -737,8 +747,8 @@ export default function ValueChain() {
           <ValueChainTable rows={filteredValueChains} selectedId={selected?.id} onSelect={selectChain} />
           <div className="mt-5 space-y-1 text-xs font-bold text-slate-500">
             <p>* 산업 병목도: 해당 밸류체인이 산업 성장에서 얼마나 대체하기 어려운 핵심 구간인지 봅니다.</p>
-            <p>* 시장 유동성: 관련 종목 수, 당일 등락률, 단기 추세, 상승 종목 비율, 대표 종목 움직임을 반영합니다.</p>
-            <p>* 시장 반응: 산업 병목도가 실제 가격·수급 반응으로 확인되는 정도를 봅니다.</p>
+            <p>* 시장 유동성: 상승·하락 방향보다 관련 종목 수, 당일 움직임의 절대 크기, 단기 추세의 활동성을 반영합니다.</p>
+            <p>* 시장 반응: 유동성이 실제 상승 방향성, 대표 종목 확인, 실적 연결성으로 이어지는 정도를 봅니다.</p>
           </div>
         </section>
 
