@@ -66,7 +66,16 @@ export function ValueChainTable({
           {rows.map((row) => (
             <tr
               key={row.id}
+              data-no-drag="true"
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(row)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(row);
+                }
+              }}
               className={selectedId === row.id ? "sticky-row-selected bg-blue-50/70 dark:bg-blue-950/35" : "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/70"}
             >
               <td className="px-4 py-4 font-black text-radar-ink">{row.name}</td>

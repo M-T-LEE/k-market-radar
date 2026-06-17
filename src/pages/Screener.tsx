@@ -252,8 +252,8 @@ function getTrendMove(stock: Stock) {
 
 function EarningsOutlookPanel({ stock }: { stock: Stock }) {
   const metrics = [
-    { label: "컨센서스 매출액", value: "연동 대기", note: "외부 컨센서스 API 연결 필요" },
-    { label: "컨센서스 영업이익", value: "연동 대기", note: "외부 컨센서스 API 연결 필요" },
+    { label: "컨센서스 매출액", value: "연동 대기", note: "FnGuide/WISEfn 등 컨센서스 API 필요" },
+    { label: "컨센서스 영업이익", value: "연동 대기", note: "KRX/DART가 아닌 추정치 제공사 연결 필요" },
     { label: "예상 EPS 성장", value: formatPercent(stock.epsEstimateGrowthRate), note: "현재 보유 추정치" },
     { label: "영업이익률", value: formatPercent(stock.operatingMargin), note: "수익성 방어력" }
   ];
@@ -1129,9 +1129,19 @@ export default function Screener() {
               return (
                 <tr
                   key={stock.id}
+                  data-no-drag="true"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => {
                     setSelectedId(stock.id);
                     setIsDetailOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedId(stock.id);
+                      setIsDetailOpen(true);
+                    }
                   }}
                   className={cn(
                     "cursor-pointer hover:bg-slate-50",
