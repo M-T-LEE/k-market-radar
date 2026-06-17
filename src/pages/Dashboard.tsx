@@ -1,9 +1,8 @@
 import { Cpu, Star, TriangleAlert, Zap } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../components/Badge";
 import { DataTable } from "../components/DataTable";
-import { Heatmap } from "../components/Heatmap";
 import {
   IndustryCycleRadarPanel,
   RiskEventCalendarPanel,
@@ -18,11 +17,164 @@ import { scenarios } from "../data/scenarios";
 import { calculateFinalScore, calculatePreReflectionRisk, getFinalDecision } from "../lib/scoring";
 import { cn, formatPercent, getMarketMoveTextClass } from "../lib/formatters";
 import { getScreenerUrl, getValueChainUrl } from "../lib/externalLinks";
+import {
+  buildDashboardMarketList,
+  buildDashboardSectorRows,
+  dashboardListModeLabels,
+  dashboardListModes,
+  dashboardMarkets,
+  formatDashboardMetricValue,
+  type DashboardListMode,
+  type DashboardMarket
+} from "../lib/dashboardMarketLists";
+import type { Stock } from "../types/stock";
 
-const heatmapTabs = ["KOSPI", "KOSDAQ"] as const;
+function MarketFlowBoard({
+  stocks,
+  market,
+  mode,
+  onMarketChange,
+  onModeChange
+}: {
+  stocks: Stock[];
+  market: DashboardMarket;
+  mode: DashboardListMode;
+  onMarketChange: (market: DashboardMarket) => void;
+  onModeChange: (mode: DashboardListMode) => void;
+}) {
+  const topRows = useMemo(() => buildDashboardMarketList(stocks, market, mode, 9), [market, mode, stocks]);
+  const sectorRows = useMemo(() => buildDashboardSectorRows(stocks, market, mode, 6), [market, mode, stocks]);
+  const metricLabel = dashboardListModeLabels[mode];
+  const isEstimatedFlow = mode === "foreign" || mode === "institution";
+
+  return (
+    <section className="flex h-full flex-col rounded-lg border border-radar-line bg-white p-5 shadow-card">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black text-blue-600">금일 시장 흐름</p>
+          <h2 className="mt-1 text-lg font-black">시장별 밸류체인 리스트</h2>
+          <p className="mt-1 text-xs font-bold text-slate-500">
+            코스피·코스닥을 나눠 거래대금, 상승률, 수급 상위 종목을 섹터 단위로 봅니다.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex rounded-lg border border-radar-line bg-slate-50 p-1">
+            {dashboardMarkets.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onMarketChange(item)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-black text-slate-600",
+                  market === item && "bg-blue-600 text-white shadow-sm"
+                )}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap rounded-lg border border-radar-line bg-slate-50 p-1">
+            {dashboardListModes.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onModeChange(item)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-black text-slate-600",
+                  mode === item && "bg-slate-900 text-white shadow-sm"
+                )}
+              >
+                {dashboardListModeLabels[item]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid flex-1 grid-cols-[0.9fr_1.1fr] gap-4 max-2xl:grid-cols-1">
+        <div className="rounded-lg border border-radar-line bg-slate-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black text-radar-ink">섹터별 상위 흐름</h3>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">{sectorRows.length}개 섹터</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {sectorRows.map((row, index) => (
+              <Link
+                key={row.sector}
+                to={getValueChainUrl({ query: row.sector })}
+                className="block rounded-lg border border-radar-line bg-white px-3 py-3 transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-400">{index + 1}</p>
+                    <h4 className="mt-1 truncate text-sm font-black text-radar-ink">{row.sector}</h4>
+                    <p className="mt-1 truncate text-xs font-bold text-slate-500">
+                      대표 {row.topStock.name} · 관련 {row.count}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={cn("text-sm font-black", mode === "gainers" ? getMarketMoveTextClass(row.value) : "text-blue-700")}>
+                      {formatDashboardMetricValue(row.value, mode)}
+                    </p>
+                    <p className={cn("mt-1 text-[11px] font-black", getMarketMoveTextClass(row.avgMove))}>
+                      평균 {formatPercent(row.avgMove)}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+            {!sectorRows.length ? (
+              <div className="rounded-lg border border-dashed border-radar-line bg-white px-3 py-8 text-center text-sm font-bold text-slate-500">
+                표시할 섹터 데이터가 없습니다.
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-radar-line bg-slate-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black text-radar-ink">{market} {metricLabel} 상위</h3>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">종목 {topRows.length}</span>
+          </div>
+          <div className="mt-3 divide-y divide-radar-line overflow-hidden rounded-lg border border-radar-line bg-white">
+            {topRows.map((row, index) => (
+              <div key={row.stock.id} className="flex items-center gap-3 px-3 py-3 hover:bg-blue-50/60">
+                <Link to={getScreenerUrl({ stock: row.stock.id })} className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-500">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black text-radar-ink">{row.stock.name}</span>
+                    <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                      {row.stock.ticker} · {row.sector}
+                    </span>
+                  </span>
+                </Link>
+                <span className={cn("shrink-0 text-right text-sm font-black", mode === "gainers" ? getMarketMoveTextClass(row.value) : "text-radar-ink")}>
+                  {formatDashboardMetricValue(row.value, mode)}
+                </span>
+                <StockExternalLink stock={row.stock} compact />
+              </div>
+            ))}
+            {!topRows.length ? (
+              <div className="px-3 py-8 text-center text-sm font-bold text-slate-500">표시할 종목 데이터가 없습니다.</div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {isEstimatedFlow ? (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+          외국인·기관 순매수는 투자자별 수급 API 연결 전까지 거래량, 가격 반응, 섹터 점수 기반 보완 추정으로 표시됩니다.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export default function Dashboard() {
-  const [market, setMarket] = useState<(typeof heatmapTabs)[number]>("KOSPI");
-  const [heatmapMode, setHeatmapMode] = useState<"종목별" | "섹터별">("종목별");
+  const [market, setMarket] = useState<DashboardMarket>("KOSPI");
+  const [flowMode, setFlowMode] = useState<DashboardListMode>("turnover");
   const [scenarioId, setScenarioId] = useState(scenarios[0].id);
   const { stocks, issues, alerts } = useMarketData();
   const { isFavorite } = useFavorites();
@@ -42,8 +194,6 @@ export default function Dashboard() {
     [stocks]
   );
 
-  const heatmapStocks = useMemo(() => stocks.filter((stock) => stock.market === market), [market, stocks]);
-  const deferredHeatmapStocks = useDeferredValue(heatmapStocks);
   const scenarioMomentum = useMemo(
     () =>
       scenarios
@@ -119,52 +269,13 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-[1.05fr_0.95fr] items-stretch gap-5 max-xl:grid-cols-1">
-        <section className="flex h-full flex-col rounded-lg border border-radar-line bg-white p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black">시장 히트맵</h2>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <div className="flex rounded-lg border border-radar-line bg-slate-50 p-1">
-                {(["종목별", "섹터별"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setHeatmapMode(tab)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-black text-slate-600",
-                      heatmapMode === tab && "bg-slate-900 text-white shadow-sm"
-                    )}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-              <div className="flex rounded-lg border border-radar-line bg-slate-50 p-1">
-                {heatmapTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setMarket(tab)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-black text-slate-600",
-                      market === tab && "bg-blue-600 text-white shadow-sm"
-                    )}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 flex-1">
-            <Heatmap
-              stocks={deferredHeatmapStocks}
-              mode={heatmapMode}
-              marketLabel={market}
-              className="h-full"
-              gridClassName="xl:h-[790px] 2xl:h-[830px]"
-            />
-          </div>
-        </section>
+        <MarketFlowBoard
+          stocks={stocks}
+          market={market}
+          mode={flowMode}
+          onMarketChange={setMarket}
+          onModeChange={setFlowMode}
+        />
 
         <div className="grid h-full gap-5">
           <section className="rounded-lg border border-radar-line bg-white p-5 shadow-card xl:h-[436px]">

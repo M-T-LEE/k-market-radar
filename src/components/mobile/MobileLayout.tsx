@@ -32,6 +32,15 @@ import { cn, formatMarketCap, formatNumber, formatPercent, getMarketMoveTextClas
 import { createPortfolioHolding, readPortfolioHoldings, writePortfolioHoldings } from "../../lib/portfolioStorage";
 import { preloadLikelyRoutesOnIdle, preloadRouteForPath } from "../../lib/routePreloaders";
 import { getScenarioStocks } from "../../lib/scenarioMatching";
+import {
+  buildDashboardMarketList,
+  dashboardListModeLabels,
+  dashboardListModes,
+  dashboardMarkets,
+  formatDashboardMetricValue,
+  type DashboardListMode,
+  type DashboardMarket
+} from "../../lib/dashboardMarketLists";
 import { StockExternalLink } from "../StockExternalLink";
 import type { Scenario, ValueChain } from "../../types/scenario";
 import type { Stock } from "../../types/stock";
@@ -711,8 +720,16 @@ function ValueChainCard({
 function MobileDashboard() {
   const model = useMobileMarketModel({ scenarios: true, valueChains: true });
   const [detail, setDetail] = useState<MobileDetailState | null>(null);
+  const [market, setMarket] = useState<DashboardMarket>("KOSPI");
+  const [flowMode, setFlowMode] = useState<DashboardListMode>("turnover");
   const strongestScenario = model.scenarioSummaries[0];
   const strongestChain = model.valueChainSummaries[0];
+  const marketFlowRows = useMemo(
+    () => buildDashboardMarketList(model.domesticStocks, market, flowMode, 6),
+    [flowMode, market, model.domesticStocks]
+  );
+  const flowModeLabel = dashboardListModeLabels[flowMode];
+  const isEstimatedFlow = flowMode === "foreign" || flowMode === "institution";
 
   return (
     <MobilePage>
@@ -722,6 +739,82 @@ function MobileDashboard() {
         <MetricCard label="강한 산업" value={`${model.scenarioSummaries.filter((item) => item.avgMove > 0).length}`} tone="positive" icon={Activity} />
         <MetricCard label="확인 알림" value={`${model.alerts.length}`} tone="neutral" icon={Bell} />
       </section>
+
+      <MobileSection title="금일 시장별 섹터 리스트" subtitle="코스피·코스닥별 거래대금, 상승률, 수급 상위 종목을 빠르게 봅니다.">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {dashboardMarkets.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setMarket(item)}
+                className={cn(
+                  "min-h-11 rounded-xl border border-slate-800 px-3 text-sm font-black",
+                  market === item ? "bg-blue-600 text-white" : "bg-slate-950 text-slate-300"
+                )}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {dashboardListModes.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFlowMode(item)}
+                className={cn(
+                  "min-h-11 rounded-xl border border-slate-800 px-3 text-xs font-black",
+                  flowMode === item ? "bg-slate-100 text-slate-950" : "bg-slate-950 text-slate-300"
+                )}
+              >
+                {dashboardListModeLabels[item]}
+              </button>
+            ))}
+          </div>
+          {isEstimatedFlow ? (
+            <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs font-bold leading-5 text-amber-200">
+              수급 API 연결 전에는 거래량·가격 반응 기반 보완 추정으로 표시됩니다.
+            </p>
+          ) : null}
+          <div className="space-y-2">
+            {marketFlowRows.map((row, index) => (
+              <article
+                key={row.stock.id}
+                className="cursor-pointer rounded-2xl border border-slate-800 bg-slate-950/45 p-4 active:bg-slate-900"
+                onClick={() => setDetail(getStockDetail(row.stock))}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-blue-300">
+                      {index + 1} · {row.sector}
+                    </p>
+                    <h3 className="mt-1 truncate text-base font-black text-slate-50">{row.stock.name}</h3>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{row.stock.ticker} · {market}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={cn("text-sm font-black", flowMode === "gainers" ? getMarketMoveTextClass(row.value, "dark") : "text-slate-100")}>
+                      {formatDashboardMetricValue(row.value, flowMode)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-slate-500">{flowModeLabel}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className={cn("text-xs font-black", getMarketMoveTextClass(row.dailyChangeRate, "dark"))}>
+                    당일 {formatPercent(row.dailyChangeRate)}
+                  </span>
+                  <StockExternalLink
+                    stock={row.stock}
+                    compact
+                    className="!border-slate-700 !bg-slate-900 !text-blue-200"
+                  />
+                </div>
+              </article>
+            ))}
+            {!marketFlowRows.length ? <EmptyCard message="표시할 시장 데이터가 없습니다." /> : null}
+          </div>
+        </div>
+      </MobileSection>
 
       <MobileSection title="오늘 먼저 볼 시장 흐름" subtitle="강한 산업과 밸류체인을 빠르게 확인합니다.">
         <div className="space-y-3">
